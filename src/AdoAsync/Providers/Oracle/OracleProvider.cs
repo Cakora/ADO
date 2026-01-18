@@ -4,6 +4,7 @@ using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using Oracle.ManagedDataAccess.Client;
+using AdoAsync;
 using AdoAsync.Abstractions;
 
 namespace AdoAsync.Providers.Oracle;
@@ -17,15 +18,15 @@ public sealed class OracleProvider : IDbProvider
     /// <summary>Creates an Oracle connection.</summary>
     public DbConnection CreateConnection(string connectionString)
     {
-        ArgumentNullException.ThrowIfNull(connectionString);
+        Validate.Required(connectionString, nameof(connectionString));
         return new OracleConnection(connectionString);
     }
 
     /// <summary>Creates an Oracle command.</summary>
     public DbCommand CreateCommand(DbConnection connection, CommandDefinition definition)
     {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(definition);
+        Validate.Required(connection, nameof(connection));
+        Validate.Required(definition, nameof(definition));
 
         var command = connection.CreateCommand();
         command.CommandText = definition.CommandText;
@@ -40,8 +41,8 @@ public sealed class OracleProvider : IDbProvider
     /// <summary>Applies parameters to an Oracle command (cursor handling must be explicit).</summary>
     public void ApplyParameters(DbCommand command, IEnumerable<DbParameter> parameters)
     {
-        ArgumentNullException.ThrowIfNull(command);
-        ArgumentNullException.ThrowIfNull(parameters);
+        Validate.Required(command, nameof(command));
+        Validate.Required(parameters, nameof(parameters));
 
         // Oracle cursor outputs must be defined provider-side; map cursor parameters explicitly when needed.
         foreach (var param in parameters)
@@ -49,6 +50,7 @@ public sealed class OracleProvider : IDbProvider
             var oraParam = new OracleParameter
             {
                 ParameterName = param.Name,
+                // Map nulls to DBNull to satisfy ADO.NET parameter requirements.
                 Value = param.Value ?? DBNull.Value,
                 Direction = param.Direction
             };
@@ -76,22 +78,24 @@ public sealed class OracleProvider : IDbProvider
     /// <summary>Performs Oracle bulk import via OracleBulkCopy.</summary>
     public ValueTask<int> BulkImportAsync(DbConnection connection, BulkImportRequest request, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(request);
+        Validate.Required(connection, nameof(connection));
+        Validate.Required(request, nameof(request));
 
         if (connection is not OracleConnection oracleConnection)
         {
-            throw new InvalidOperationException("Oracle bulk import requires an OracleConnection.");
+            throw new DatabaseException(ErrorCategory.Configuration, "Oracle bulk import requires an OracleConnection.");
         }
 
         using var bulkCopy = new OracleBulkCopy(oracleConnection)
         {
             DestinationTableName = request.DestinationTable,
+            // NotifyAfter=1 lets us capture rows copied without extra queries.
             NotifyAfter = 1
         };
 
         if (request.BatchSize.HasValue)
         {
+            // Batch sizing reduces memory pressure for large imports when supported.
             bulkCopy.BatchSize = request.BatchSize.Value;
         }
 
@@ -103,6 +107,7 @@ public sealed class OracleProvider : IDbProvider
             bulkCopy.ColumnMappings.Add(mapping.SourceColumn, mapping.DestinationColumn);
         }
 
+        // OracleBulkCopy has no async API; check cancellation before the blocking call.
         cancellationToken.ThrowIfCancellationRequested();
         bulkCopy.WriteToServer(request.SourceReader);
         return new ValueTask<int>(rowsCopied);

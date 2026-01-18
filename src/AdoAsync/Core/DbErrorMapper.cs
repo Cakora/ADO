@@ -14,7 +14,8 @@ public static class DbErrorMapper
     /// <summary>Returns an unknown error shape for the given exception.</summary>
     public static DbError Unknown(Exception exception)
     {
-        ArgumentNullException.ThrowIfNull(exception);
+        Validate.Required(exception, nameof(exception));
+        // Keep the unknown shape stable to avoid leaking provider-specific types.
         return new DbError
         {
             Type = DbErrorType.Unknown,
@@ -29,7 +30,7 @@ public static class DbErrorMapper
     /// <summary>Maps an exception, optionally overriding provider code/transience.</summary>
     public static DbError Map(Exception exception, string? providerCode = null, bool? isTransientOverride = null)
     {
-        ArgumentNullException.ThrowIfNull(exception);
+        Validate.Required(exception, nameof(exception));
 
         if (exception is TimeoutException)
         {
@@ -39,6 +40,7 @@ public static class DbErrorMapper
                 Code = DbErrorCode.GenericTimeout,
                 MessageKey = "errors.timeout",
                 MessageParameters = new[] { exception.Message },
+                // Default to transient for timeouts unless a provider overrides.
                 IsTransient = isTransientOverride ?? true,
                 ProviderDetails = providerCode ?? exception.GetType().FullName
             };
@@ -52,6 +54,7 @@ public static class DbErrorMapper
                 Code = DbErrorCode.GenericTimeout,
                 MessageKey = "errors.canceled",
                 MessageParameters = new[] { exception.Message },
+                // Cancellations are usually caller-driven, so don't mark as transient by default.
                 IsTransient = isTransientOverride ?? false,
                 ProviderDetails = providerCode ?? exception.GetType().FullName
             };
@@ -64,13 +67,15 @@ public static class DbErrorMapper
     /// <summary>Creates a validation error from message/parameters.</summary>
     public static DbError Validation(string message, IEnumerable<string>? parameters = null)
     {
-        ArgumentNullException.ThrowIfNull(message);
+        Validate.Required(message, nameof(message));
         return new DbError
         {
             Type = DbErrorType.ValidationError,
             Code = DbErrorCode.ValidationFailed,
             MessageKey = "errors.validation",
+            // MessageParameters carries per-field context for client display.
             MessageParameters = parameters is null ? new[] { message } : new List<string>(parameters),
+            // Validation errors are deterministic, not transient.
             IsTransient = false
         };
     }

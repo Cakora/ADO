@@ -9,7 +9,10 @@ public sealed class CommandDefinitionValidator : AbstractValidator<CommandDefini
     /// <summary>Creates the validator with required rules.</summary>
     public CommandDefinitionValidator()
     {
-        RuleFor(x => x.CommandText).NotEmpty();
+        RuleFor(x => x.CommandText)
+            .Must(IsNonWhitespace)
+            .WithMessage("CommandText must not be empty or whitespace.");
+        // Stored procedures should be parameterized and validated explicitly.
         RuleFor(x => x.Parameters).NotNull().When(x => x.CommandType == System.Data.CommandType.StoredProcedure);
         RuleFor(x => x.AllowedStoredProcedures)
             .NotNull()
@@ -29,6 +32,26 @@ public sealed class CommandDefinitionValidator : AbstractValidator<CommandDefini
     #endregion
 
     #region Private Helpers
+    private static bool IsNonWhitespace(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return false;
+        }
+
+        // Span-based scan avoids allocation from trimming or splitting.
+        ReadOnlySpan<char> span = value.AsSpan();
+        for (var i = 0; i < span.Length; i++)
+        {
+            if (!char.IsWhiteSpace(span[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool EnsureStoredProcedureAllowed(CommandDefinition definition)
     {
         if (definition.CommandType != System.Data.CommandType.StoredProcedure)
@@ -38,6 +61,7 @@ public sealed class CommandDefinitionValidator : AbstractValidator<CommandDefini
 
         if (definition.AllowedStoredProcedures is null)
         {
+            // Missing allow-list means we cannot safely validate dynamic procedure names.
             return false;
         }
 
@@ -45,6 +69,10 @@ public sealed class CommandDefinitionValidator : AbstractValidator<CommandDefini
         {
             IdentifierWhitelist.EnsureStoredProcedureAllowed(definition.CommandText, definition.AllowedStoredProcedures);
             return true;
+        }
+        catch (DatabaseException)
+        {
+            return false;
         }
         catch (InvalidOperationException)
         {
@@ -61,6 +89,7 @@ public sealed class CommandDefinitionValidator : AbstractValidator<CommandDefini
 
         if (definition.AllowedIdentifiers is null)
         {
+            // Missing allow-list means dynamic identifiers cannot be trusted.
             return false;
         }
 
@@ -68,6 +97,10 @@ public sealed class CommandDefinitionValidator : AbstractValidator<CommandDefini
         {
             IdentifierWhitelist.EnsureIdentifiersAllowed(definition.IdentifiersToValidate, definition.AllowedIdentifiers);
             return true;
+        }
+        catch (DatabaseException)
+        {
+            return false;
         }
         catch (InvalidOperationException)
         {

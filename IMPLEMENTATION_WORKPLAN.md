@@ -321,6 +321,22 @@ These are mandatory, always-on constraints to apply whenever new code is created
   - `record` / `record struct` for immutable option/result/contract models (prefer `readonly record struct` for small value-like types to reduce allocations)
   - Collection expressions where they reduce noise without hiding logic
 
+### Advanced .NET 8 features to consider (add deliberately)
+Use these only where they clearly reduce allocations or improve throughput. Add measurable guidance and document the call sites.
+- `ReadOnlySpan<T>` / `ReadOnlyMemory<T>` for parsing/formatting or parameter value handling where data can stay on the stack.
+- `FrozenDictionary` / `FrozenSet` for read-mostly lookups (build once, then reuse).
+- `ArrayPool<T>` / `MemoryPool<T>` only for explicit, opt-in large buffer reuse to reduce GC pressure.
+
+### Current usage status (as of last review)
+- Implemented: `ValueTask`, `IAsyncEnumerable<T>`, `record` contracts, `DbDataSource` support, `FrozenDictionary` for provider type maps, `FrozenSet` for allow-lists, `ReadOnlySpan<T>` for validation, `ReadOnlyMemory<T>` for identifier quoting, `ArrayPool<T>` for validation message building and bulk import ordinals, analyzers + warnings-as-errors.
+- Not yet implemented: none.
+
+### Where we can use them in this project (candidate call sites)
+- `ReadOnlySpan<T>` / `ReadOnlyMemory<T>`: fast parsing/validation of command text, identifiers, or parameter names in validators (`src/AdoAsync/Validation/CommandDefinitionValidator.cs`, `src/AdoAsync/Validation/DbParameterValidator.cs`).
+- `FrozenSet` for allow-lists passed into `CommandDefinition` and validated in `IdentifierWhitelist` when lists are large and reused (`src/AdoAsync/Core/CommandDefinition.cs`, `src/AdoAsync/Core/IdentifierWhitelist.cs`).
+- `FrozenDictionary` for provider type/exception mappings if we move from switch expressions to data-driven tables (`src/AdoAsync/Providers/SqlServer/SqlServerTypeMapper.cs`, `src/AdoAsync/Providers/PostgreSql/PostgreSqlTypeMapper.cs`, `src/AdoAsync/Providers/Oracle/OracleTypeMapper.cs`).
+- `ArrayPool<T>` / `MemoryPool<T>` for any future custom row/materialization buffers or bulk import batching (e.g., `src/AdoAsync/Execution/Async/DbExecutor.cs`, `src/AdoAsync/Providers/*/*Provider.cs`).
+
 ### Async-first design
 - Async-first and async-only: public APIs are asynchronous (`async`/`await`, `Task`/`ValueTask`, `IAsyncEnumerable<T>`)
 - If any sync API exists, it MUST be a thin wrapper around async (no duplicate logic)

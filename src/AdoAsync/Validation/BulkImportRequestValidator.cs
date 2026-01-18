@@ -41,6 +41,7 @@ public sealed class BulkImportRequestValidator : AbstractValidator<BulkImportReq
     #region Private Helpers
     private static bool HasUniqueDestinationColumns(BulkImportRequest request)
     {
+        // Use an ordinal set so column uniqueness is deterministic across cultures.
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var mapping in request.ColumnMappings)
         {
@@ -55,6 +56,7 @@ public sealed class BulkImportRequestValidator : AbstractValidator<BulkImportReq
 
     private static bool HasUniqueSourceColumns(BulkImportRequest request)
     {
+        // Enforce source column uniqueness to avoid ambiguous reader lookups.
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var mapping in request.ColumnMappings)
         {
@@ -92,6 +94,7 @@ public sealed class BulkImportRequestValidator : AbstractValidator<BulkImportReq
             return false;
         }
 
+        // Build the list once so allow-list validation can be centralized.
         var destinationColumns = new List<string>();
         foreach (var mapping in request.ColumnMappings)
         {

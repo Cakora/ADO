@@ -24,16 +24,19 @@ public sealed record CommandDefinition
     /// <summary>
     /// For readers: use default streaming-friendly behavior unless caller overrides.
     /// </summary>
+    // Behavior is caller-controlled to keep streaming vs buffering explicit.
     public CommandBehavior Behavior { get; init; } = CommandBehavior.Default;
 
     /// <summary>
     /// Allow-list of stored procedures permitted for execution. Required when using stored procedures.
     /// </summary>
+    // Keep allow-lists caller-owned so policies live outside the library.
     public IReadOnlySet<string>? AllowedStoredProcedures { get; init; }
 
     /// <summary>
     /// Allow-list of identifiers permitted for dynamic identifier usage (e.g., table names).
     /// </summary>
+    // Identifiers are validated explicitly to avoid SQL injection via dynamic names.
     public IReadOnlySet<string>? AllowedIdentifiers { get; init; }
 
     /// <summary>

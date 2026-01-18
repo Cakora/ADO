@@ -18,12 +18,15 @@ public sealed record DbOptions
     public required int CommandTimeoutSeconds { get; init; }
 
     /// <summary>Enables diagnostics collection.</summary>
+    // Keeps instrumentation opt-in to avoid overhead in hot paths.
     public bool EnableDiagnostics { get; init; } = false;
 
     /// <summary>Enables FluentValidation checks.</summary>
+    // Validation is opt-out to catch mistakes early in development.
     public bool EnableValidation { get; init; } = true;
 
     /// <summary>Enables Polly-backed retries.</summary>
+    // Retries are explicit and off by default to avoid hidden behavior.
     public bool EnableRetry { get; init; } = false;
 
     /// <summary>Retry count when retries are enabled.</summary>
@@ -35,6 +38,7 @@ public sealed record DbOptions
     /// <summary>
     /// Optional provider data source; when set, connections are created from this data source instead of the raw connection string.
     /// </summary>
+    // DataSource supports centralized pooling/configuration without changing the public API surface.
     public DbDataSource? DataSource { get; init; }
     #endregion
 }

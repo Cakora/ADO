@@ -4,6 +4,7 @@ using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
+using AdoAsync;
 using AdoAsync.Abstractions;
 
 namespace AdoAsync.Providers.SqlServer;
@@ -17,15 +18,15 @@ public sealed class SqlServerProvider : IDbProvider
     /// <summary>Creates a SQL Server connection.</summary>
     public DbConnection CreateConnection(string connectionString)
     {
-        ArgumentNullException.ThrowIfNull(connectionString);
+        Validate.Required(connectionString, nameof(connectionString));
         return new SqlConnection(connectionString);
     }
 
     /// <summary>Creates a SQL Server command.</summary>
     public DbCommand CreateCommand(DbConnection connection, CommandDefinition definition)
     {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(definition);
+        Validate.Required(connection, nameof(connection));
+        Validate.Required(definition, nameof(definition));
 
         var command = connection.CreateCommand();
         command.CommandText = definition.CommandText;
@@ -40,25 +41,28 @@ public sealed class SqlServerProvider : IDbProvider
     /// <summary>Applies parameters to a SQL Server command.</summary>
     public void ApplyParameters(DbCommand command, IEnumerable<DbParameter> parameters)
     {
-        ArgumentNullException.ThrowIfNull(command);
-        ArgumentNullException.ThrowIfNull(parameters);
+        Validate.Required(command, nameof(command));
+        Validate.Required(parameters, nameof(parameters));
 
         foreach (var param in parameters)
         {
             var sqlParam = new SqlParameter
             {
                 ParameterName = param.Name,
+                // Map nulls to DBNull to satisfy ADO.NET parameter requirements.
                 Value = param.Value ?? DBNull.Value,
                 Direction = param.Direction
             };
 
             if (param.Size.HasValue)
             {
+                // Only set when specified to avoid provider defaults that may be too small.
                 sqlParam.Size = param.Size.Value;
             }
 
             if (param.Precision.HasValue)
             {
+                // Precision/scale are optional unless the data type requires them.
                 sqlParam.Precision = param.Precision.Value;
             }
 
@@ -75,18 +79,20 @@ public sealed class SqlServerProvider : IDbProvider
     /// <summary>Performs SQL Server bulk import via SqlBulkCopy.</summary>
     public async ValueTask<int> BulkImportAsync(DbConnection connection, BulkImportRequest request, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(request);
+        Validate.Required(connection, nameof(connection));
+        Validate.Required(request, nameof(request));
 
         if (connection is not SqlConnection sqlConnection)
         {
-            throw new InvalidOperationException("SQL Server bulk import requires a SqlConnection.");
+            throw new DatabaseException(ErrorCategory.Configuration, "SQL Server bulk import requires a SqlConnection.");
         }
 
         using var bulkCopy = new SqlBulkCopy(sqlConnection)
         {
             DestinationTableName = request.DestinationTable,
+            // Stream data to avoid loading entire payload into memory.
             EnableStreaming = true,
+            // NotifyAfter=1 keeps the last row count accurate for small batches.
             NotifyAfter = 1
         };
 
@@ -96,6 +102,7 @@ public sealed class SqlServerProvider : IDbProvider
         }
 
         var rowsCopied = 0;
+        // Track rows copied without extra round-trips.
         bulkCopy.SqlRowsCopied += (_, args) => rowsCopied = (int)args.RowsCopied;
 
         foreach (var mapping in request.ColumnMappings)

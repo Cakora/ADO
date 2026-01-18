@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using AdoAsync;
 using AdoAsync.Abstractions;
 using AdoAsync.Providers.Oracle;
 using AdoAsync.Providers.PostgreSql;
@@ -56,7 +57,7 @@ public sealed class DbExecutor : IDbExecutor
     /// <summary>Creates a new executor for the specified options.</summary>
     public static DbExecutor Create(DbOptions options, bool isInUserTransaction = false)
     {
-        ArgumentNullException.ThrowIfNull(options);
+        Validate.Required(options, nameof(options));
 
         var provider = ResolveProvider(options.DatabaseType);
         var optionsValidator = new DbOptionsValidator();
@@ -72,7 +73,7 @@ public sealed class DbExecutor : IDbExecutor
         var validationError = ValidationOrchestrator.ValidateOptions(options, options.EnableValidation, optionsValidator);
         if (validationError is not null)
         {
-            throw new InvalidOperationException($"Invalid DbOptions: {validationError.MessageKey}");
+            throw new DatabaseException(ErrorCategory.Configuration, $"Invalid DbOptions: {validationError.MessageKey}");
         }
 
         return new DbExecutor(options, provider, retryPolicy, commandValidator, parameterValidator, bulkImportValidator);
@@ -80,16 +81,16 @@ public sealed class DbExecutor : IDbExecutor
     #endregion
 
     #region Public API
-    /// <inheritdoc />
     public async ValueTask<int> ExecuteAsync(CommandDefinition command, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
         var validationError = ValidationOrchestrator.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
-            throw new InvalidOperationException(validationError.MessageKey);
+            throw new DatabaseException(ErrorCategory.Validation, validationError.MessageKey);
         }
 
+        // Wrap execution in the retry policy to keep retry behavior centralized.
         return await _retryPolicy.ExecuteAsync(async ct =>
         {
             await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
@@ -97,19 +98,19 @@ public sealed class DbExecutor : IDbExecutor
         }, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <inheritdoc />
     public async ValueTask<T> ExecuteScalarAsync<T>(CommandDefinition command, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
         var validationError = ValidationOrchestrator.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
-            throw new InvalidOperationException(validationError.MessageKey);
+            throw new DatabaseException(ErrorCategory.Validation, validationError.MessageKey);
         }
 
         return await _retryPolicy.ExecuteAsync(async ct =>
         {
             await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
+            // Convert.ChangeType keeps ExecuteScalar generic without duplicating per-type logic.
             var value = await dbCommand.ExecuteScalarAsync(ct).ConfigureAwait(false);
             if (value is null or DBNull)
             {
@@ -125,20 +126,19 @@ public sealed class DbExecutor : IDbExecutor
         }, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <inheritdoc />
     public IAsyncEnumerable<T> QueryAsync<T>(CommandDefinition command, Func<IDataRecord, T> map, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(map);
+        Validate.Required(map, nameof(map));
         var validationError = ValidationOrchestrator.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
-            throw new InvalidOperationException(validationError.MessageKey);
+            throw new DatabaseException(ErrorCategory.Validation, validationError.MessageKey);
         }
 
+        // Iterator defers execution until enumeration, keeping streaming behavior explicit.
         return QueryAsyncIterator(command, map, cancellationToken);
     }
 
-    /// <inheritdoc />
     public async ValueTask<DbResult> QueryTablesAsync(CommandDefinition command, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
@@ -158,6 +158,7 @@ public sealed class DbExecutor : IDbExecutor
                 await using var reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.Default, ct).ConfigureAwait(false);
                 do
                 {
+                    // DataTable materialization is allocation-heavy by design; kept explicit.
                     var table = new DataTable();
                     table.Load(reader);
                     tables.Add(table);
@@ -177,7 +178,6 @@ public sealed class DbExecutor : IDbExecutor
         }
     }
 
-    /// <inheritdoc />
     public async ValueTask<BulkImportResult> BulkImportAsync(BulkImportRequest request, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
@@ -194,6 +194,7 @@ public sealed class DbExecutor : IDbExecutor
             {
                 await EnsureConnectionAsync(ct).ConfigureAwait(false);
                 var started = Stopwatch.StartNew();
+                // Stopwatch captures only the provider call to keep diagnostics focused.
                 var rows = await _provider.BulkImportAsync(_connection!, request, ct).ConfigureAwait(false);
                 started.Stop();
                 return new BulkImportResult
@@ -211,7 +212,6 @@ public sealed class DbExecutor : IDbExecutor
         }
     }
 
-    /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
@@ -240,6 +240,7 @@ public sealed class DbExecutor : IDbExecutor
 
         if (_connection.State != ConnectionState.Open)
         {
+            // Open lazily to keep constructor side-effect free and avoid unused connections.
             await _connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         }
     }
@@ -250,6 +251,7 @@ public sealed class DbExecutor : IDbExecutor
         var dbCommand = _provider.CreateCommand(_connection!, definition);
         if (definition.Parameters is { } parameters)
         {
+            // Parameters are applied once per command to keep provider logic isolated.
             _provider.ApplyParameters(dbCommand, parameters);
         }
 
@@ -279,6 +281,7 @@ public sealed class DbExecutor : IDbExecutor
 
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
+            // Map each row on the fly to keep memory usage proportional to row size.
             yield return map(reader);
         }
     }
@@ -287,9 +290,9 @@ public sealed class DbExecutor : IDbExecutor
     {
         if (_disposed)
         {
-            throw new ObjectDisposedException(nameof(DbExecutor));
+            throw new DatabaseException(ErrorCategory.Disposed, "DbExecutor has been disposed.");
         }
-        await Task.CompletedTask;
+        await Task.CompletedTask; // Preserve async signature for uniform call sites.
     }
 
     private static IDbProvider ResolveProvider(DatabaseType databaseType) =>
@@ -298,7 +301,7 @@ public sealed class DbExecutor : IDbExecutor
             DatabaseType.SqlServer => new SqlServerProvider(),
             DatabaseType.PostgreSql => new PostgreSqlProvider(),
             DatabaseType.Oracle => new OracleProvider(),
-            _ => throw new NotSupportedException($"Database type '{databaseType}' is not supported.")
+            _ => throw new DatabaseException(ErrorCategory.Unsupported, $"Database type '{databaseType}' is not supported.")
         };
 
     private static DbError MapProviderError(DatabaseType databaseType, Exception exception) =>

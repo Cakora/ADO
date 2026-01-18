@@ -1,4 +1,5 @@
 using System;
+using AdoAsync;
 using AdoAsync.Providers.Oracle;
 using AdoAsync.Providers.PostgreSql;
 using AdoAsync.Providers.SqlServer;
@@ -35,7 +36,8 @@ public class TypeMapperTests
     public void SqlServerTypeMapper_ThrowsOnUnsupportedType()
     {
         var act = () => SqlServerTypeMapper.Map((DbDataType)999);
-        act.Should().Throw<NotSupportedException>();
+        act.Should().Throw<DatabaseException>()
+            .Where(e => e.Kind == ErrorCategory.Unsupported);
     }
     #endregion
 }
