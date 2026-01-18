@@ -182,6 +182,7 @@ Detailed rules (mandatory):
 ### Result strategy (low memory by default)
 - Default is streaming (`QueryAsync<T>`) to avoid buffering large result sets in memory
 - Materialized results (DataTable/DataSet) are allowed only as explicit APIs and must be documented as allocation-heavy
+- Document provider type differences and normalization boundaries (see `docs/type-handling.md`).
 - Multiple result sets (multi-data support)
   - Decision: this library MUST support multi-result queries/procedures
   - Must support multiple result sets from a single command (when the provider supports it natively)

@@ -19,6 +19,17 @@ public static class CsvExtensions
         return builder.ToString();
     }
 
+    public static string ToCsv<T>(
+        this IEnumerable<T> items,
+        IReadOnlyList<CsvColumn<T>>? columns = null,
+        IReadOnlyDictionary<string, string?>? columnMap = null,
+        bool includeHeader = true)
+    {
+        var builder = new StringBuilder();
+        AppendCsv(items, builder, columns, columnMap, includeHeader);
+        return builder.ToString();
+    }
+
     public static void AppendCsv(this DataTable table, StringBuilder builder, IReadOnlyDictionary<string, string?>? columnMap = null, bool includeHeader = true)
     {
         if (table is null)
@@ -64,17 +75,6 @@ public static class CsvExtensions
 
             builder.AppendLine();
         }
-    }
-
-    public static string ToCsv<T>(
-        this IEnumerable<T> items,
-        IReadOnlyList<CsvColumn<T>>? columns = null,
-        IReadOnlyDictionary<string, string?>? columnMap = null,
-        bool includeHeader = true)
-    {
-        var builder = new StringBuilder();
-        AppendCsv(items, builder, columns, columnMap, includeHeader);
-        return builder.ToString();
     }
 
     public static void AppendCsv<T>(

@@ -59,14 +59,16 @@ foreach (var table in result.Tables!)
 
 ## SELECT -> Custom Class (explicit mapper)
 ```csharp
+using AdoAsync.Common;
+
 await foreach (var customer in executor.QueryAsync(new CommandDefinition
 {
     CommandText = "select Id, Name from dbo.Customers",
     CommandType = CommandType.Text
 }, record => new Customer
 {
-    Id = record.GetInt32(0),
-    Name = record.GetString(1)
+    Id = record.Get<long>(0),
+    Name = record.Get<string>(1)
 }))
 {
     // use customer

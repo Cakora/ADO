@@ -97,14 +97,16 @@ foreach (var table in result.Tables!)
 
 Explicit mapping to custom classes (fast, no reflection):
 ```csharp
+using AdoAsync.Common;
+
 await foreach (var customer in executor.QueryAsync(new CommandDefinition
 {
     CommandText = "select Id, Name from dbo.Customers",
     CommandType = CommandType.Text
 }, record => new Customer
 {
-    Id = record.GetInt32(0),
-    Name = record.GetString(1)
+    Id = record.Get<long>(0),
+    Name = record.Get<string>(1)
 }))
 {
     // use customer
@@ -117,7 +119,7 @@ var customers = result.Tables![0]
     .AsEnumerable()
     .Select(row => new Customer
     {
-        Id = row.Field<int>("Id"),
+        Id = row.Field<long>("Id"),
         Name = row.Field<string>("Name")
     })
     .ToArray();
@@ -132,6 +134,7 @@ Provider-specific examples:
 - `docs/provider-examples/sqlserver-examples.md`
 - `docs/provider-examples/postgresql-examples.md`
 - `docs/provider-examples/oracle-examples.md`
+- `docs/type-handling.md` (provider type differences and normalization notes)
 
 ## Integration Tests (Run Later)
 The integration tests are skipped by default because they require a live database.
