@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 
 namespace AdoAsync.Common;
 
@@ -21,11 +22,18 @@ public static class DataTableExtensions
         }
 
         var normalized = table.Clone();
+        EnsureGenericColumnNames(normalized);
         foreach (DataColumn column in normalized.Columns)
         {
             if (columnTypes.TryGetValue(column.ColumnName, out var type))
             {
-                column.DataType = type.IsEnum ? Enum.GetUnderlyingType(type) : type;
+                var nullableUnderlying = Nullable.GetUnderlyingType(type);
+                var resolvedType = nullableUnderlying ?? (type.IsEnum ? Enum.GetUnderlyingType(type) : type);
+                column.DataType = resolvedType;
+                if (nullableUnderlying is not null)
+                {
+                    column.AllowDBNull = true;
+                }
             }
         }
 
@@ -44,8 +52,17 @@ public static class DataTableExtensions
                 var columnName = table.Columns[i].ColumnName;
                 if (columnTypes.TryGetValue(columnName, out var targetType))
                 {
-                    var resolvedType = targetType.IsEnum ? Enum.GetUnderlyingType(targetType) : targetType;
-                    newRow[i] = CommonValueConverter.ConvertValue(value, resolvedType);
+                    var nullableUnderlying = Nullable.GetUnderlyingType(targetType);
+                    var resolvedType = nullableUnderlying ?? (targetType.IsEnum ? Enum.GetUnderlyingType(targetType) : targetType);
+                    var conversionType = nullableUnderlying ?? targetType;
+                    var converted = CommonValueConverter.ConvertValue(value, conversionType);
+
+                    if (conversionType.IsEnum && resolvedType != conversionType)
+                    {
+                        converted = Convert.ChangeType(converted, resolvedType, CultureInfo.InvariantCulture);
+                    }
+
+                    newRow[i] = converted;
                 }
                 else
                 {
@@ -56,6 +73,34 @@ public static class DataTableExtensions
         }
 
         return normalized;
+    }
+
+    private static void EnsureGenericColumnNames(DataTable table)
+    {
+        var comparer = table.CaseSensitive ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
+        var usedNames = new HashSet<string>(comparer);
+
+        for (var i = 0; i < table.Columns.Count; i++)
+        {
+            var column = table.Columns[i];
+            if (string.IsNullOrWhiteSpace(column.ColumnName))
+            {
+                column.ColumnName = $"Column{i + 1}";
+            }
+
+            if (usedNames.Add(column.ColumnName))
+            {
+                continue;
+            }
+
+            var suffix = 2;
+            while (!usedNames.Add($"{column.ColumnName}_{suffix}"))
+            {
+                suffix++;
+            }
+
+            column.ColumnName = $"{column.ColumnName}_{suffix}";
+        }
     }
 
 }

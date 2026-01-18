@@ -47,6 +47,36 @@ public class CommonValueConverterTests
     }
 
     [Fact]
+    public void DataRecord_Get_ConvertsEnumFromString()
+    {
+        var table = new DataTable();
+        table.Columns.Add("Status", typeof(string));
+        table.Rows.Add("One");
+
+        using var reader = table.CreateDataReader();
+        reader.Read().Should().BeTrue();
+
+        var value = reader.Get<SampleStatus>(0);
+
+        value.Should().Be(SampleStatus.One);
+    }
+
+    [Fact]
+    public void DataRecord_Get_ConvertsNullableInt()
+    {
+        var table = new DataTable();
+        table.Columns.Add("Count", typeof(int));
+        table.Rows.Add(5);
+
+        using var reader = table.CreateDataReader();
+        reader.Read().Should().BeTrue();
+
+        var value = reader.Get<int?>(0);
+
+        value.Should().Be(5);
+    }
+
+    [Fact]
     public void DataTable_Normalize_ConvertsEnumToUnderlying()
     {
         var table = new DataTable();
@@ -59,5 +89,40 @@ public class CommonValueConverterTests
         });
 
         normalized.Rows[0]["Status"].Should().Be(1);
+    }
+
+    [Fact]
+    public void DataTable_Normalize_ConvertsEnumFromStringToUnderlying()
+    {
+        var table = new DataTable();
+        table.Columns.Add("Status", typeof(string));
+        table.Rows.Add("One");
+
+        var normalized = table.Normalize(new System.Collections.Generic.Dictionary<string, Type>
+        {
+            ["Status"] = typeof(SampleStatus)
+        });
+
+        normalized.Columns["Status"]!.DataType.Should().Be(typeof(int));
+        normalized.Rows[0]["Status"].Should().Be((int)SampleStatus.One);
+    }
+
+    [Fact]
+    public void DataTable_Normalize_UsesUnderlyingTypeForNullable()
+    {
+        var table = new DataTable();
+        table.Columns.Add("Count", typeof(int));
+        table.Rows.Add(1);
+        table.Rows.Add(DBNull.Value);
+
+        var normalized = table.Normalize(new System.Collections.Generic.Dictionary<string, Type>
+        {
+            ["Count"] = typeof(int?)
+        });
+
+        normalized.Columns["Count"]!.DataType.Should().Be(typeof(int));
+        normalized.Columns["Count"]!.AllowDBNull.Should().BeTrue();
+        normalized.Rows[0]["Count"].Should().Be(1);
+        normalized.Rows[1]["Count"].Should().Be(DBNull.Value);
     }
 }

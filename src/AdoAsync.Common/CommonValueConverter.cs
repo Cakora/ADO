@@ -7,7 +7,25 @@ internal static class CommonValueConverter
 {
     internal static object ConvertValue(object value, Type targetType)
     {
-        if (targetType == typeof(Guid))
+        if (targetType is null)
+        {
+            throw new ArgumentNullException(nameof(targetType));
+        }
+
+        var nullableUnderlying = Nullable.GetUnderlyingType(targetType);
+        var resolvedTargetType = nullableUnderlying ?? targetType;
+
+        if (value is null)
+        {
+            if (!resolvedTargetType.IsValueType || nullableUnderlying is not null)
+            {
+                return null!;
+            }
+
+            throw new InvalidCastException($"Cannot convert null to non-nullable type '{resolvedTargetType}'.");
+        }
+
+        if (resolvedTargetType == typeof(Guid))
         {
             if (value is Guid guid)
             {
@@ -23,7 +41,7 @@ internal static class CommonValueConverter
             return string.IsNullOrWhiteSpace(text) ? Guid.Empty : Guid.Parse(text);
         }
 
-        if (targetType == typeof(DateTimeOffset))
+        if (resolvedTargetType == typeof(DateTimeOffset))
         {
             return value switch
             {
@@ -31,34 +49,43 @@ internal static class CommonValueConverter
                 DateTime dateTime => new DateTimeOffset(dateTime.Kind == DateTimeKind.Unspecified
                     ? DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
                     : dateTime),
-                _ => Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture)
+                _ => Convert.ChangeType(value, resolvedTargetType, CultureInfo.InvariantCulture)
             };
         }
 
-        if (targetType == typeof(DateTime))
+        if (resolvedTargetType == typeof(DateTime))
         {
             return value switch
             {
                 DateTime dateTime => dateTime,
-                _ => Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture)
+                _ => Convert.ChangeType(value, resolvedTargetType, CultureInfo.InvariantCulture)
             };
         }
 
-        if (targetType == typeof(TimeSpan))
+        if (resolvedTargetType == typeof(TimeSpan))
         {
             return value switch
             {
                 TimeSpan span => span,
                 DateTime dateValue => dateValue.TimeOfDay,
-                _ => Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture)
+                _ => Convert.ChangeType(value, resolvedTargetType, CultureInfo.InvariantCulture)
             };
         }
 
-        if (targetType.IsEnum)
+        if (resolvedTargetType.IsEnum)
         {
-            return Enum.ToObject(targetType, value);
+            if (value is string enumText)
+            {
+                return Enum.Parse(resolvedTargetType, enumText, ignoreCase: true);
+            }
+
+            var enumUnderlying = Enum.GetUnderlyingType(resolvedTargetType);
+            var normalizedValue = value.GetType() == enumUnderlying
+                ? value
+                : Convert.ChangeType(value, enumUnderlying, CultureInfo.InvariantCulture);
+            return Enum.ToObject(resolvedTargetType, normalizedValue);
         }
 
-        return Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture);
+        return Convert.ChangeType(value, resolvedTargetType, CultureInfo.InvariantCulture);
     }
 }
