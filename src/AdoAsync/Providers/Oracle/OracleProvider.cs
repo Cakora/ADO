@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using Oracle.ManagedDataAccess.Client;
+using Oracle.ManagedDataAccess.Types;
 using AdoAsync.Abstractions;
 
 namespace AdoAsync.Providers.Oracle;
@@ -17,15 +19,15 @@ public sealed class OracleProvider : IDbProvider
     /// <summary>Creates an Oracle connection.</summary>
     public DbConnection CreateConnection(string connectionString)
     {
-        ArgumentNullException.ThrowIfNull(connectionString);
+        Validate.Required(connectionString, nameof(connectionString));
         return new OracleConnection(connectionString);
     }
 
     /// <summary>Creates an Oracle command.</summary>
     public DbCommand CreateCommand(DbConnection connection, CommandDefinition definition)
     {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(definition);
+        Validate.Required(connection, nameof(connection));
+        Validate.Required(definition, nameof(definition));
 
         var command = connection.CreateCommand();
         command.CommandText = definition.CommandText;
@@ -40,8 +42,8 @@ public sealed class OracleProvider : IDbProvider
     /// <summary>Applies parameters to an Oracle command (cursor handling must be explicit).</summary>
     public void ApplyParameters(DbCommand command, IEnumerable<DbParameter> parameters)
     {
-        ArgumentNullException.ThrowIfNull(command);
-        ArgumentNullException.ThrowIfNull(parameters);
+        Validate.Required(command, nameof(command));
+        Validate.Required(parameters, nameof(parameters));
 
         // Oracle cursor outputs must be defined provider-side; map cursor parameters explicitly when needed.
         foreach (var param in parameters)
@@ -76,12 +78,12 @@ public sealed class OracleProvider : IDbProvider
     /// <summary>Performs Oracle bulk import via OracleBulkCopy.</summary>
     public ValueTask<int> BulkImportAsync(DbConnection connection, BulkImportRequest request, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(request);
+        Validate.Required(connection, nameof(connection));
+        Validate.Required(request, nameof(request));
 
         if (connection is not OracleConnection oracleConnection)
         {
-            throw new InvalidOperationException("Oracle bulk import requires an OracleConnection.");
+            throw new DatabaseException(ErrorCategory.Configuration, "Oracle bulk import requires an OracleConnection.");
         }
 
         using var bulkCopy = new OracleBulkCopy(oracleConnection)
@@ -106,6 +108,32 @@ public sealed class OracleProvider : IDbProvider
         cancellationToken.ThrowIfCancellationRequested();
         bulkCopy.WriteToServer(request.SourceReader);
         return new ValueTask<int>(rowsCopied);
+    }
+    #endregion
+
+    #region Internal Helpers
+    internal static IReadOnlyList<DataTable> ReadRefCursorResults(DbCommand command)
+    {
+        var tables = new List<DataTable>();
+        foreach (OracleParameter parameter in command.Parameters)
+        {
+            if (parameter.OracleDbType != OracleDbType.RefCursor)
+            {
+                continue;
+            }
+
+            if (parameter.Value is not OracleRefCursor cursor)
+            {
+                continue;
+            }
+
+            using var reader = cursor.GetDataReader();
+            var table = new DataTable();
+            table.Load(reader);
+            tables.Add(table);
+        }
+
+        return tables;
     }
     #endregion
 }

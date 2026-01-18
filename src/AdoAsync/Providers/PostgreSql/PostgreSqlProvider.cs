@@ -1,9 +1,13 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.Common;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Npgsql;
+using NpgsqlTypes;
 using AdoAsync.Abstractions;
 
 namespace AdoAsync.Providers.PostgreSql;
@@ -17,15 +21,15 @@ public sealed class PostgreSqlProvider : IDbProvider
     /// <summary>Creates a PostgreSQL connection.</summary>
     public DbConnection CreateConnection(string connectionString)
     {
-        ArgumentNullException.ThrowIfNull(connectionString);
+        Validate.Required(connectionString, nameof(connectionString));
         return new NpgsqlConnection(connectionString);
     }
 
     /// <summary>Creates a PostgreSQL command.</summary>
     public DbCommand CreateCommand(DbConnection connection, CommandDefinition definition)
     {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(definition);
+        Validate.Required(connection, nameof(connection));
+        Validate.Required(definition, nameof(definition));
 
         var command = connection.CreateCommand();
         command.CommandText = definition.CommandText;
@@ -40,8 +44,8 @@ public sealed class PostgreSqlProvider : IDbProvider
     /// <summary>Applies parameters to a PostgreSQL command.</summary>
     public void ApplyParameters(DbCommand command, IEnumerable<DbParameter> parameters)
     {
-        ArgumentNullException.ThrowIfNull(command);
-        ArgumentNullException.ThrowIfNull(parameters);
+        Validate.Required(command, nameof(command));
+        Validate.Required(parameters, nameof(parameters));
 
         foreach (var param in parameters)
         {
@@ -75,73 +79,163 @@ public sealed class PostgreSqlProvider : IDbProvider
     /// <summary>Performs PostgreSQL bulk import via COPY binary.</summary>
     public async ValueTask<int> BulkImportAsync(DbConnection connection, BulkImportRequest request, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(request);
+        Validate.Required(connection, nameof(connection));
+        Validate.Required(request, nameof(request));
 
         if (connection is not NpgsqlConnection npgConnection)
         {
-            throw new InvalidOperationException("PostgreSQL bulk import requires an NpgsqlConnection.");
+            throw new DatabaseException(ErrorCategory.Configuration, "PostgreSQL bulk import requires an NpgsqlConnection.");
         }
 
         var copyCommand = BuildCopyCommand(request);
-        await using var importer = npgConnection.BeginBinaryImport(copyCommand);
+        await using var importer = await npgConnection.BeginBinaryImportAsync(copyCommand, cancellationToken).ConfigureAwait(false);
 
-        var ordinals = new int[request.ColumnMappings.Count];
-        for (var i = 0; i < request.ColumnMappings.Count; i++)
+        var columnCount = request.ColumnMappings.Count;
+        var ordinals = ArrayPool<int>.Shared.Rent(columnCount);
+        try
         {
-            ordinals[i] = request.SourceReader.GetOrdinal(request.ColumnMappings[i].SourceColumn);
-        }
-
-        var rows = 0;
-        while (await request.SourceReader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            await importer.StartRowAsync(cancellationToken).ConfigureAwait(false);
-
-            for (var i = 0; i < ordinals.Length; i++)
+            for (var i = 0; i < columnCount; i++)
             {
-                var value = request.SourceReader.GetValue(ordinals[i]);
-                if (value is null || value is DBNull)
-                {
-                    await importer.WriteNullAsync(cancellationToken).ConfigureAwait(false);
-                }
-                else
-                {
-                    await importer.WriteAsync(value, cancellationToken).ConfigureAwait(false);
-                }
+                ordinals[i] = request.SourceReader.GetOrdinal(request.ColumnMappings[i].SourceColumn);
             }
 
-            rows++;
-        }
+            var rows = 0;
+            while (await request.SourceReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await importer.StartRowAsync(cancellationToken).ConfigureAwait(false);
 
-        await importer.CompleteAsync(cancellationToken).ConfigureAwait(false);
-        return rows;
+                for (var i = 0; i < columnCount; i++)
+                {
+                    var value = request.SourceReader.GetValue(ordinals[i]);
+                    if (value is null || value is DBNull)
+                    {
+                        await importer.WriteNullAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await importer.WriteAsync(value, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+
+                rows++;
+            }
+
+            await importer.CompleteAsync(cancellationToken).ConfigureAwait(false);
+            return rows;
+        }
+        finally
+        {
+            Array.Clear(ordinals, 0, columnCount);
+            ArrayPool<int>.Shared.Return(ordinals);
+        }
     }
     #endregion
 
     #region Private Helpers
     private static string BuildCopyCommand(BulkImportRequest request)
     {
-        var tableName = QuoteIdentifier(request.DestinationTable);
+        var tableName = QuoteIdentifier(request.DestinationTable.AsSpan());
         var columns = new string[request.ColumnMappings.Count];
         for (var i = 0; i < request.ColumnMappings.Count; i++)
         {
-            columns[i] = QuoteIdentifier(request.ColumnMappings[i].DestinationColumn);
+            columns[i] = QuoteIdentifier(request.ColumnMappings[i].DestinationColumn.AsSpan());
         }
 
         var columnList = string.Join(", ", columns);
         return $"COPY {tableName} ({columnList}) FROM STDIN (FORMAT BINARY)";
     }
 
-    private static string QuoteIdentifier(string identifier)
+    private static string QuoteIdentifier(ReadOnlySpan<char> identifier)
     {
-        var parts = identifier.Split('.');
-        for (var i = 0; i < parts.Length; i++)
+        var builder = new StringBuilder(identifier.Length + 2);
+        var segmentStart = 0;
+        var firstSegment = true;
+
+        for (var i = 0; i <= identifier.Length; i++)
         {
-            parts[i] = $"\"{parts[i].Replace("\"", "\"\"")}\"";
+            if (i < identifier.Length && identifier[i] != '.')
+            {
+                continue;
+            }
+
+            if (!firstSegment)
+            {
+                builder.Append('.');
+            }
+
+            firstSegment = false;
+            builder.Append('"');
+
+            for (var j = segmentStart; j < i; j++)
+            {
+                var ch = identifier[j];
+                if (ch == '"')
+                {
+                    builder.Append("\"\"");
+                }
+                else
+                {
+                    builder.Append(ch);
+                }
+            }
+
+            builder.Append('"');
+            segmentStart = i + 1;
         }
 
-        return string.Join(".", parts);
+        return builder.ToString();
+    }
+
+    internal static async Task<IReadOnlyList<DataTable>> ReadRefCursorResultsAsync(
+        DbCommand command,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        var tables = new List<DataTable>();
+        foreach (System.Data.Common.DbParameter parameter in command.Parameters)
+        {
+            if (parameter is not NpgsqlParameter npgParam || npgParam.NpgsqlDbType != NpgsqlDbType.Refcursor)
+            {
+                continue;
+            }
+
+            if (npgParam.Value is not string cursorName || string.IsNullOrWhiteSpace(cursorName))
+            {
+                continue;
+            }
+
+            await using var fetch = connection.CreateCommand();
+            fetch.Transaction = transaction;
+            fetch.CommandText = $"FETCH ALL IN {QuoteCursorName(cursorName.AsSpan())}";
+            await using var reader = await fetch.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            var table = new DataTable();
+            table.Load(reader);
+            tables.Add(table);
+        }
+
+        return tables;
+    }
+
+    private static string QuoteCursorName(ReadOnlySpan<char> name)
+    {
+        var builder = new StringBuilder(name.Length + 2);
+        builder.Append('"');
+        for (var i = 0; i < name.Length; i++)
+        {
+            var ch = name[i];
+            if (ch == '"')
+            {
+                builder.Append("\"\"");
+            }
+            else
+            {
+                builder.Append(ch);
+            }
+        }
+        builder.Append('"');
+        return builder.ToString();
     }
     #endregion
 }

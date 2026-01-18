@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.Common;
 using System.Runtime.CompilerServices;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AdoAsync.Abstractions;
@@ -56,7 +57,7 @@ public sealed class DbExecutor : IDbExecutor
     /// <summary>Creates a new executor for the specified options.</summary>
     public static DbExecutor Create(DbOptions options, bool isInUserTransaction = false)
     {
-        ArgumentNullException.ThrowIfNull(options);
+        Validate.Required(options, nameof(options));
 
         var provider = ResolveProvider(options.DatabaseType);
         var optionsValidator = new DbOptionsValidator();
@@ -72,7 +73,7 @@ public sealed class DbExecutor : IDbExecutor
         var validationError = ValidationOrchestrator.ValidateOptions(options, options.EnableValidation, optionsValidator);
         if (validationError is not null)
         {
-            throw new InvalidOperationException($"Invalid DbOptions: {validationError.MessageKey}");
+            throw new DatabaseException(ErrorCategory.Configuration, $"Invalid DbOptions: {validationError.MessageKey}");
         }
 
         return new DbExecutor(options, provider, retryPolicy, commandValidator, parameterValidator, bulkImportValidator);
@@ -87,7 +88,7 @@ public sealed class DbExecutor : IDbExecutor
         var validationError = ValidationOrchestrator.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
-            throw new InvalidOperationException(validationError.MessageKey);
+            throw new DatabaseException(ErrorCategory.Validation, validationError.MessageKey);
         }
 
         return await _retryPolicy.ExecuteAsync(async ct =>
@@ -104,7 +105,7 @@ public sealed class DbExecutor : IDbExecutor
         var validationError = ValidationOrchestrator.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
-            throw new InvalidOperationException(validationError.MessageKey);
+            throw new DatabaseException(ErrorCategory.Validation, validationError.MessageKey);
         }
 
         return await _retryPolicy.ExecuteAsync(async ct =>
@@ -128,13 +129,14 @@ public sealed class DbExecutor : IDbExecutor
     /// <inheritdoc />
     public IAsyncEnumerable<T> QueryAsync<T>(CommandDefinition command, Func<IDataRecord, T> map, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(map);
+        Validate.Required(map, nameof(map));
         var validationError = ValidationOrchestrator.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
-            throw new InvalidOperationException(validationError.MessageKey);
+            throw new DatabaseException(ErrorCategory.Validation, validationError.MessageKey);
         }
 
+        // Keep explicit mapping here; automatic mapping can wrap this method later without touching the execution path.
         return QueryAsyncIterator(command, map, cancellationToken);
     }
 
@@ -146,6 +148,16 @@ public sealed class DbExecutor : IDbExecutor
         if (validationError is not null)
         {
             return new DbResult { Success = false, Error = validationError };
+        }
+
+        if (ShouldUseOracleRefCursorPath(command))
+        {
+            return await ExecuteOracleRefCursorsAsync(command, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (ShouldUsePostgresRefCursorPath(command))
+        {
+            return await ExecutePostgresRefCursorsAsync(command, cancellationToken).ConfigureAwait(false);
         }
 
         try
@@ -256,6 +268,82 @@ public sealed class DbExecutor : IDbExecutor
         return dbCommand;
     }
 
+    private bool ShouldUseOracleRefCursorPath(CommandDefinition command) =>
+        _options.DatabaseType == DatabaseType.Oracle
+        && command.CommandType == CommandType.StoredProcedure
+        && command.Parameters is { Count: > 0 }
+        && command.Parameters.Any(p => p.DataType == DbDataType.RefCursor);
+
+    private bool ShouldUsePostgresRefCursorPath(CommandDefinition command) =>
+        _options.DatabaseType == DatabaseType.PostgreSql
+        && command.CommandType == CommandType.StoredProcedure
+        && command.Parameters is { Count: > 0 }
+        && command.Parameters.Any(p => p.DataType == DbDataType.RefCursor);
+
+    private async ValueTask<DbResult> ExecuteOracleRefCursorsAsync(CommandDefinition command, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _retryPolicy.ExecuteAsync(async ct =>
+            {
+                await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
+                await dbCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+                var tables = OracleProvider.ReadRefCursorResults(dbCommand);
+                return new DbResult
+                {
+                    Success = true,
+                    Tables = tables
+                };
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            var error = MapProviderError(_options.DatabaseType, ex);
+            return new DbResult { Success = false, Error = error };
+        }
+    }
+
+    private async ValueTask<DbResult> ExecutePostgresRefCursorsAsync(CommandDefinition command, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _retryPolicy.ExecuteAsync(async ct =>
+            {
+                await EnsureConnectionAsync(ct).ConfigureAwait(false);
+                await using var transaction = await _connection!.BeginTransactionAsync(ct).ConfigureAwait(false);
+                await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
+                dbCommand.Transaction = transaction;
+                try
+                {
+                    await dbCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+                    var tables = await PostgreSqlProvider
+                        .ReadRefCursorResultsAsync(dbCommand, _connection!, transaction, ct)
+                        .ConfigureAwait(false);
+
+                    await transaction.CommitAsync(ct).ConfigureAwait(false);
+
+                    return new DbResult
+                    {
+                        Success = true,
+                        Tables = tables
+                    };
+                }
+                catch
+                {
+                    await transaction.RollbackAsync(ct).ConfigureAwait(false);
+                    throw;
+                }
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            var error = MapProviderError(_options.DatabaseType, ex);
+            return new DbResult { Success = false, Error = error };
+        }
+    }
+
     private async IAsyncEnumerable<T> QueryAsyncIterator<T>(
         CommandDefinition command,
         Func<IDataRecord, T> map,
@@ -287,7 +375,7 @@ public sealed class DbExecutor : IDbExecutor
     {
         if (_disposed)
         {
-            throw new ObjectDisposedException(nameof(DbExecutor));
+            throw new DatabaseException(ErrorCategory.Disposed, "DbExecutor has been disposed.");
         }
         await Task.CompletedTask;
     }
@@ -298,7 +386,7 @@ public sealed class DbExecutor : IDbExecutor
             DatabaseType.SqlServer => new SqlServerProvider(),
             DatabaseType.PostgreSql => new PostgreSqlProvider(),
             DatabaseType.Oracle => new OracleProvider(),
-            _ => throw new NotSupportedException($"Database type '{databaseType}' is not supported.")
+            _ => throw new DatabaseException(ErrorCategory.Unsupported, $"Database type '{databaseType}' is not supported.")
         };
 
     private static DbError MapProviderError(DatabaseType databaseType, Exception exception) =>

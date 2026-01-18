@@ -25,9 +25,15 @@ public sealed class DbParameterValidator : AbstractValidator<DbParameter>
         RuleFor(x => x.Name).NotEmpty();
 
         RuleFor(x => x)
-            .Must(p => !IsLengthConstrainedType(p.DataType)
-                       || p.Direction == System.Data.ParameterDirection.ReturnValue
-                       || p.Size.HasValue)
+            .Must(p => !IsLengthConstrainedType(p.DataType) || p.Size.HasValue)
+            .When(p => p.Direction is System.Data.ParameterDirection.Output
+                or System.Data.ParameterDirection.InputOutput
+                or System.Data.ParameterDirection.ReturnValue)
+            .WithMessage("Output parameters must specify Size.");
+
+        RuleFor(x => x)
+            .Must(p => !IsLengthConstrainedType(p.DataType) || p.Size.HasValue)
+            .When(p => p.Direction == System.Data.ParameterDirection.Input)
             .WithMessage("String parameters should specify Size when length is constrained.");
 
         RuleFor(x => x)
@@ -48,6 +54,13 @@ public sealed class DbParameterValidator : AbstractValidator<DbParameter>
                        && p.DataType != DbDataType.UInt64)
             .When(_ => !SupportsUnsignedTypes)
             .WithMessage("Unsigned types are not supported by the current provider.");
+
+        RuleFor(x => x)
+            .Must(p => p.DataType != DbDataType.RefCursor
+                       || p.Direction is System.Data.ParameterDirection.Output
+                       or System.Data.ParameterDirection.InputOutput
+                       or System.Data.ParameterDirection.ReturnValue)
+            .WithMessage("RefCursor parameters must be Output or InputOutput.");
     }
     #endregion
 

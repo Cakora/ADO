@@ -22,7 +22,8 @@ public sealed class TransactionManager : ITransactionManager
     /// <summary>Creates a transaction manager bound to the provided connection.</summary>
     public TransactionManager(DbConnection connection)
     {
-        _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+        Validate.Required(connection, nameof(connection));
+        _connection = connection!;
     }
     #endregion
 
@@ -32,12 +33,12 @@ public sealed class TransactionManager : ITransactionManager
     {
         if (!ReferenceEquals(connection, _connection))
         {
-            throw new InvalidOperationException("TransactionManager must use the same connection instance.");
+            throw new DatabaseException(ErrorCategory.State, "TransactionManager must use the same connection instance.");
         }
 
         if (_transaction is not null)
         {
-            throw new InvalidOperationException("Transaction already started.");
+            throw new DatabaseException(ErrorCategory.State, "Transaction already started.");
         }
 
         if (connection.State != ConnectionState.Open)
@@ -54,7 +55,7 @@ public sealed class TransactionManager : ITransactionManager
     {
         if (_transaction is null)
         {
-            throw new InvalidOperationException("No active transaction to commit.");
+            throw new DatabaseException(ErrorCategory.State, "No active transaction to commit.");
         }
 
         await _transaction.CommitAsync(cancellationToken).ConfigureAwait(false);

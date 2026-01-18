@@ -16,8 +16,8 @@ public static class RetryPolicyFactory
         Func<Exception, bool> isTransient,
         bool isInUserTransaction = false)
     {
-        ArgumentNullException.ThrowIfNull(options);
-        ArgumentNullException.ThrowIfNull(isTransient);
+        Validate.Required(options, nameof(options));
+        Validate.Required(isTransient, nameof(isTransient));
 
         // Avoid retries inside caller-managed transactions to prevent partial work repeats.
         if (!options.EnableRetry || isInUserTransaction)

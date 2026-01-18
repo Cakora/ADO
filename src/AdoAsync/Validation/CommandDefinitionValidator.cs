@@ -46,7 +46,7 @@ public sealed class CommandDefinitionValidator : AbstractValidator<CommandDefini
             IdentifierWhitelist.EnsureStoredProcedureAllowed(definition.CommandText, definition.AllowedStoredProcedures);
             return true;
         }
-        catch (InvalidOperationException)
+        catch (DatabaseException)
         {
             return false;
         }
@@ -69,7 +69,7 @@ public sealed class CommandDefinitionValidator : AbstractValidator<CommandDefini
             IdentifierWhitelist.EnsureIdentifiersAllowed(definition.IdentifiersToValidate, definition.AllowedIdentifiers);
             return true;
         }
-        catch (InvalidOperationException)
+        catch (DatabaseException)
         {
             return false;
         }

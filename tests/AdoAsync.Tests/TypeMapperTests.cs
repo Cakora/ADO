@@ -25,6 +25,12 @@ public class TypeMapperTests
     }
 
     [Fact]
+    public void PostgreSqlTypeMapper_MapsRefCursor()
+    {
+        PostgreSqlTypeMapper.Map(DbDataType.RefCursor).Should().Be(NpgsqlTypes.NpgsqlDbType.Refcursor);
+    }
+
+    [Fact]
     public void OracleTypeMapper_MapsCommonTypes()
     {
         OracleTypeMapper.Map(DbDataType.String).Should().Be(Oracle.ManagedDataAccess.Client.OracleDbType.NVarchar2);
@@ -32,10 +38,17 @@ public class TypeMapperTests
     }
 
     [Fact]
+    public void OracleTypeMapper_MapsRefCursor()
+    {
+        OracleTypeMapper.Map(DbDataType.RefCursor).Should().Be(Oracle.ManagedDataAccess.Client.OracleDbType.RefCursor);
+    }
+
+    [Fact]
     public void SqlServerTypeMapper_ThrowsOnUnsupportedType()
     {
         var act = () => SqlServerTypeMapper.Map((DbDataType)999);
-        act.Should().Throw<NotSupportedException>();
+        act.Should().Throw<DatabaseException>()
+            .Where(ex => ex.Kind == ErrorCategory.Unsupported);
     }
     #endregion
 }

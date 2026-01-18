@@ -104,6 +104,24 @@ public class ValidationTests
     }
 
     [Fact]
+    public void DbParameterValidator_RefCursorRequiresOutputDirection()
+    {
+        var validator = new DbParameterValidator();
+        var parameter = new DbParameter
+        {
+            Name = "p_cursor",
+            DataType = DbDataType.RefCursor,
+            Value = null,
+            Direction = ParameterDirection.Input
+        };
+
+        var result = validator.Validate(parameter);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().ContainSingle(e => e.ErrorMessage.Contains("RefCursor parameters must be Output or InputOutput"));
+    }
+
+    [Fact]
     public void DbParameterValidator_RequiresPrecisionScaleForDecimal()
     {
         var validator = new DbParameterValidator();

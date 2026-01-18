@@ -14,7 +14,7 @@ public static class DbErrorMapper
     /// <summary>Returns an unknown error shape for the given exception.</summary>
     public static DbError Unknown(Exception exception)
     {
-        ArgumentNullException.ThrowIfNull(exception);
+        Validate.Required(exception, nameof(exception));
         return new DbError
         {
             Type = DbErrorType.Unknown,
@@ -29,7 +29,7 @@ public static class DbErrorMapper
     /// <summary>Maps an exception, optionally overriding provider code/transience.</summary>
     public static DbError Map(Exception exception, string? providerCode = null, bool? isTransientOverride = null)
     {
-        ArgumentNullException.ThrowIfNull(exception);
+        Validate.Required(exception, nameof(exception));
 
         if (exception is TimeoutException)
         {
@@ -64,7 +64,7 @@ public static class DbErrorMapper
     /// <summary>Creates a validation error from message/parameters.</summary>
     public static DbError Validation(string message, IEnumerable<string>? parameters = null)
     {
-        ArgumentNullException.ThrowIfNull(message);
+        Validate.Required(message, nameof(message));
         return new DbError
         {
             Type = DbErrorType.ValidationError,

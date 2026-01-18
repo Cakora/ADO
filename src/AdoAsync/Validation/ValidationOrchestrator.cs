@@ -18,8 +18,8 @@ public static class ValidationOrchestrator
             return null;
         }
 
-        ArgumentNullException.ThrowIfNull(options);
-        ArgumentNullException.ThrowIfNull(validator);
+        Validate.Required(options, nameof(options));
+        Validate.Required(validator, nameof(validator));
 
         var result = validator.Validate(options);
         return result.IsValid ? null : ToError(result.Errors);
@@ -33,9 +33,9 @@ public static class ValidationOrchestrator
             return null;
         }
 
-        ArgumentNullException.ThrowIfNull(command);
-        ArgumentNullException.ThrowIfNull(validator);
-        ArgumentNullException.ThrowIfNull(parameterValidator);
+        Validate.Required(command, nameof(command));
+        Validate.Required(validator, nameof(validator));
+        Validate.Required(parameterValidator, nameof(parameterValidator));
 
         var result = validator.Validate(command);
         if (!result.IsValid)
@@ -66,8 +66,8 @@ public static class ValidationOrchestrator
             return null;
         }
 
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(validator);
+        Validate.Required(request, nameof(request));
+        Validate.Required(validator, nameof(validator));
 
         var result = validator.Validate(request);
         return result.IsValid ? null : ToError(result.Errors);

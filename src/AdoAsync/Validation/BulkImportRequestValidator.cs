@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using FluentValidation;
 
 namespace AdoAsync.Validation;
@@ -41,30 +42,18 @@ public sealed class BulkImportRequestValidator : AbstractValidator<BulkImportReq
     #region Private Helpers
     private static bool HasUniqueDestinationColumns(BulkImportRequest request)
     {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var mapping in request.ColumnMappings)
-        {
-            if (!seen.Add(mapping.DestinationColumn))
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return request.ColumnMappings
+            .Select(mapping => mapping.DestinationColumn)
+            .Distinct(StringComparer.Ordinal)
+            .Count() == request.ColumnMappings.Count;
     }
 
     private static bool HasUniqueSourceColumns(BulkImportRequest request)
     {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var mapping in request.ColumnMappings)
-        {
-            if (!seen.Add(mapping.SourceColumn))
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return request.ColumnMappings
+            .Select(mapping => mapping.SourceColumn)
+            .Distinct(StringComparer.Ordinal)
+            .Count() == request.ColumnMappings.Count;
     }
 
     private static bool EnsureDestinationTableAllowed(BulkImportRequest request)
@@ -79,7 +68,7 @@ public sealed class BulkImportRequestValidator : AbstractValidator<BulkImportReq
             IdentifierWhitelist.EnsureIdentifierAllowed(request.DestinationTable, request.AllowedDestinationTables);
             return true;
         }
-        catch (InvalidOperationException)
+        catch (DatabaseException)
         {
             return false;
         }
@@ -92,18 +81,14 @@ public sealed class BulkImportRequestValidator : AbstractValidator<BulkImportReq
             return false;
         }
 
-        var destinationColumns = new List<string>();
-        foreach (var mapping in request.ColumnMappings)
-        {
-            destinationColumns.Add(mapping.DestinationColumn);
-        }
+        var destinationColumns = request.ColumnMappings.Select(mapping => mapping.DestinationColumn);
 
         try
         {
             IdentifierWhitelist.EnsureIdentifiersAllowed(destinationColumns, request.AllowedDestinationColumns);
             return true;
         }
-        catch (InvalidOperationException)
+        catch (DatabaseException)
         {
             return false;
         }

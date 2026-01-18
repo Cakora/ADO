@@ -9,6 +9,6 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SonarAnalyzer.CSharp" Version="9.22.0.87781" PrivateAssets="all" />
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.18.0.131500" PrivateAssets="all" />
   </ItemGroup>
 </Project>

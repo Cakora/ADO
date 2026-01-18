@@ -73,6 +73,8 @@ public enum DbDataType
     /// <summary>JSON payload.</summary>
     Json,
     /// <summary>XML payload.</summary>
-    Xml
+    Xml,
+    /// <summary>REF CURSOR (Oracle/PostgreSQL).</summary>
+    RefCursor
     #endregion
 }

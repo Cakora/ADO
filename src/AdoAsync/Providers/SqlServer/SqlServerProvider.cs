@@ -17,15 +17,15 @@ public sealed class SqlServerProvider : IDbProvider
     /// <summary>Creates a SQL Server connection.</summary>
     public DbConnection CreateConnection(string connectionString)
     {
-        ArgumentNullException.ThrowIfNull(connectionString);
+        Validate.Required(connectionString, nameof(connectionString));
         return new SqlConnection(connectionString);
     }
 
     /// <summary>Creates a SQL Server command.</summary>
     public DbCommand CreateCommand(DbConnection connection, CommandDefinition definition)
     {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(definition);
+        Validate.Required(connection, nameof(connection));
+        Validate.Required(definition, nameof(definition));
 
         var command = connection.CreateCommand();
         command.CommandText = definition.CommandText;
@@ -40,8 +40,8 @@ public sealed class SqlServerProvider : IDbProvider
     /// <summary>Applies parameters to a SQL Server command.</summary>
     public void ApplyParameters(DbCommand command, IEnumerable<DbParameter> parameters)
     {
-        ArgumentNullException.ThrowIfNull(command);
-        ArgumentNullException.ThrowIfNull(parameters);
+        Validate.Required(command, nameof(command));
+        Validate.Required(parameters, nameof(parameters));
 
         foreach (var param in parameters)
         {
@@ -75,12 +75,12 @@ public sealed class SqlServerProvider : IDbProvider
     /// <summary>Performs SQL Server bulk import via SqlBulkCopy.</summary>
     public async ValueTask<int> BulkImportAsync(DbConnection connection, BulkImportRequest request, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(request);
+        Validate.Required(connection, nameof(connection));
+        Validate.Required(request, nameof(request));
 
         if (connection is not SqlConnection sqlConnection)
         {
-            throw new InvalidOperationException("SQL Server bulk import requires a SqlConnection.");
+            throw new DatabaseException(ErrorCategory.Configuration, "SQL Server bulk import requires a SqlConnection.");
         }
 
         using var bulkCopy = new SqlBulkCopy(sqlConnection)

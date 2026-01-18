@@ -19,6 +19,7 @@ public interface IDbExecutor : IAsyncDisposable
     ValueTask<T> ExecuteScalarAsync<T>(CommandDefinition command, CancellationToken cancellationToken = default);
 
     /// <summary>Streams rows and maps each record via the provided mapper.</summary>
+    // Explicit mapper keeps this fast; automatic mapping can be added later as an optional wrapper.
     IAsyncEnumerable<T> QueryAsync<T>(CommandDefinition command, Func<IDataRecord, T> map, CancellationToken cancellationToken = default);
 
     /// <summary>Executes a command and materializes results into tables (allocation-heavy).</summary>
