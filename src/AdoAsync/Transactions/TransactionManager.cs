@@ -3,7 +3,6 @@ using System.Data;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
-using AdoAsync;
 using AdoAsync.Abstractions;
 
 namespace AdoAsync.Transactions;
@@ -16,7 +15,6 @@ public sealed class TransactionManager : ITransactionManager
     #region Fields
     private readonly DbConnection _connection;
     private DbTransaction? _transaction;
-    // Tracks whether CommitAsync has succeeded to decide rollback on dispose.
     private bool _committed;
     #endregion
 
@@ -24,8 +22,7 @@ public sealed class TransactionManager : ITransactionManager
     /// <summary>Creates a transaction manager bound to the provided connection.</summary>
     public TransactionManager(DbConnection connection)
     {
-        Validate.Required(connection, nameof(connection));
-        _connection = connection;
+        _connection = connection ?? throw new ArgumentNullException(nameof(connection));
     }
     #endregion
 
@@ -35,18 +32,16 @@ public sealed class TransactionManager : ITransactionManager
     {
         if (!ReferenceEquals(connection, _connection))
         {
-            // Prevent cross-connection transactions that would break atomicity guarantees.
-            throw new DatabaseException(ErrorCategory.State, "TransactionManager must use the same connection instance.");
+            throw new InvalidOperationException("TransactionManager must use the same connection instance.");
         }
 
         if (_transaction is not null)
         {
-            throw new DatabaseException(ErrorCategory.State, "Transaction already started.");
+            throw new InvalidOperationException("Transaction already started.");
         }
 
         if (connection.State != ConnectionState.Open)
         {
-            // Open on demand so callers can build options without side effects.
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -59,7 +54,7 @@ public sealed class TransactionManager : ITransactionManager
     {
         if (_transaction is null)
         {
-            throw new DatabaseException(ErrorCategory.State, "No active transaction to commit.");
+            throw new InvalidOperationException("No active transaction to commit.");
         }
 
         await _transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -84,7 +79,6 @@ public sealed class TransactionManager : ITransactionManager
         {
             if (!_committed)
             {
-                // Rollback on dispose prevents leaking uncommitted work.
                 await _transaction.RollbackAsync().ConfigureAwait(false);
             }
 

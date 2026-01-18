@@ -17,18 +17,15 @@ public sealed record DbResult
     public object? ScalarValue { get; init; }
 
     /// <summary>Materialized tables (allocation-heavy).</summary>
-    // Exposed for explicit opt-in materialization; streaming is preferred.
     public IReadOnlyList<DataTable>? Tables { get; init; }
 
     /// <summary>Output parameter values keyed by name.</summary>
-    // Kept as a dictionary to preserve parameter naming from callers/providers.
     public IReadOnlyDictionary<string, object?>? OutputParameters { get; init; }
 
     /// <summary>Execution duration.</summary>
     public TimeSpan? ExecutionDuration { get; init; }
 
     /// <summary>Retry count applied during execution.</summary>
-    // Exposed to help callers differentiate transient retries from slow queries.
     public int RetryCount { get; init; }
 
     /// <summary>Error details when unsuccessful.</summary>

@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using AdoAsync;
 using Polly;
 
 namespace AdoAsync.Resilience;
@@ -17,13 +16,12 @@ public static class RetryPolicyFactory
         Func<Exception, bool> isTransient,
         bool isInUserTransaction = false)
     {
-        Validate.Required(options, nameof(options));
-        Validate.Required(isTransient, nameof(isTransient));
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(isTransient);
 
         // Avoid retries inside caller-managed transactions to prevent partial work repeats.
         if (!options.EnableRetry || isInUserTransaction)
         {
-            // NoOp keeps the call sites uniform even when retries are disabled.
             return Policy.NoOpAsync();
         }
 
@@ -31,9 +29,7 @@ public static class RetryPolicyFactory
         var retryCount = options.RetryCount;
 
         return Policy
-            // The transient predicate keeps provider-specific logic out of the resilience layer.
             .Handle<Exception>(isTransient)
-            // Fixed backoff keeps retry behavior predictable and easy to reason about.
             .WaitAndRetryAsync(retryCount, _ => delay);
     }
     #endregion

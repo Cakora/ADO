@@ -66,14 +66,11 @@ public enum DbDataType
     /// <summary>Date+time with offset.</summary>
     DateTimeOffset,
     /// <summary>Rowversion/timestamp.</summary>
-    // Timestamp is provider-specific (e.g., SQL Server rowversion), not a date/time.
     Timestamp,
     /// <summary>Interval/duration.</summary>
-    // Duration differs from timestamp/date types; providers map to interval-specific types when available.
     Interval,
 
     /// <summary>JSON payload.</summary>
-    // JSON remains text-based to keep provider behavior consistent.
     Json,
     /// <summary>XML payload.</summary>
     Xml

@@ -19,13 +19,10 @@ public static class PostgreSqlExceptionMapper
 
         return pgEx.SqlState switch
         {
-            // Deadlock/serialization failures are safe to retry in many cases.
             PostgresErrorCodes.DeadlockDetected => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.Deadlock, Code = DbErrorCode.GenericDeadlock, IsTransient = true },
             PostgresErrorCodes.LockNotAvailable => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.ResourceLimit, Code = DbErrorCode.ResourceLimitExceeded, IsTransient = true },
             PostgresErrorCodes.SerializationFailure => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.Deadlock, Code = DbErrorCode.GenericDeadlock, IsTransient = true },
-            // QueryCanceled is commonly raised by statement timeouts or user cancel.
             PostgresErrorCodes.QueryCanceled => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.Timeout, Code = DbErrorCode.GenericTimeout, IsTransient = true },
-            // ConnectionException covers connection failures and admin shutdowns.
             PostgresErrorCodes.ConnectionException => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.ConnectionFailure, Code = DbErrorCode.ConnectionLost, IsTransient = true },
             PostgresErrorCodes.SyntaxError => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.SyntaxError, Code = DbErrorCode.SyntaxError, IsTransient = false },
             _ => DbErrorMapper.Unknown(pgEx)

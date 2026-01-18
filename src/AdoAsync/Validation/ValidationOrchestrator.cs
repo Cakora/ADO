@@ -1,7 +1,5 @@
 using System;
-using System.Buffers;
 using System.Collections.Generic;
-using AdoAsync;
 using FluentValidation;
 
 namespace AdoAsync.Validation;
@@ -20,8 +18,8 @@ public static class ValidationOrchestrator
             return null;
         }
 
-        Validate.Required(options, nameof(options));
-        Validate.Required(validator, nameof(validator));
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(validator);
 
         var result = validator.Validate(options);
         return result.IsValid ? null : ToError(result.Errors);
@@ -35,9 +33,9 @@ public static class ValidationOrchestrator
             return null;
         }
 
-        Validate.Required(command, nameof(command));
-        Validate.Required(validator, nameof(validator));
-        Validate.Required(parameterValidator, nameof(parameterValidator));
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(validator);
+        ArgumentNullException.ThrowIfNull(parameterValidator);
 
         var result = validator.Validate(command);
         if (!result.IsValid)
@@ -47,7 +45,6 @@ public static class ValidationOrchestrator
 
         if (command.Parameters is { } parameters)
         {
-            // Validate parameters individually to keep error context precise.
             foreach (var param in parameters)
             {
                 var paramResult = parameterValidator.Validate(param);
@@ -69,8 +66,8 @@ public static class ValidationOrchestrator
             return null;
         }
 
-        Validate.Required(request, nameof(request));
-        Validate.Required(validator, nameof(validator));
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(validator);
 
         var result = validator.Validate(request);
         return result.IsValid ? null : ToError(result.Errors);
@@ -81,40 +78,10 @@ public static class ValidationOrchestrator
     private static DbError ToError(IEnumerable<FluentValidation.Results.ValidationFailure> failures)
     {
         // Preserve property context in a compact, client-friendly format.
-        IReadOnlyList<string> messages;
-        if (failures is ICollection<FluentValidation.Results.ValidationFailure> collection)
+        var messages = new List<string>();
+        foreach (var failure in failures)
         {
-            if (collection.Count == 0)
-            {
-                messages = Array.Empty<string>();
-            }
-            else
-            {
-                var rented = ArrayPool<string>.Shared.Rent(collection.Count);
-                var index = 0;
-                // Pooling amortizes allocations when validation emits many failures.
-                foreach (var failure in collection)
-                {
-                    rented[index++] = $"{failure.PropertyName}: {failure.ErrorMessage}";
-                }
-
-                var result = new string[index];
-                Array.Copy(rented, result, index);
-                // Clear pooled references to avoid retaining messages longer than needed.
-                Array.Clear(rented, 0, index);
-                ArrayPool<string>.Shared.Return(rented);
-                messages = result;
-            }
-        }
-        else
-        {
-            var list = new List<string>();
-            foreach (var failure in failures)
-            {
-                list.Add($"{failure.PropertyName}: {failure.ErrorMessage}");
-            }
-
-            messages = list;
+            messages.Add($"{failure.PropertyName}: {failure.ErrorMessage}");
         }
 
         return new DbError

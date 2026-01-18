@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Frozen;
 using System.Data;
-using AdoAsync;
 using Microsoft.Data.SqlClient;
 
 namespace AdoAsync.Providers.SqlServer;
@@ -11,55 +9,49 @@ namespace AdoAsync.Providers.SqlServer;
 /// </summary>
 public static class SqlServerTypeMapper
 {
-    // FrozenDictionary keeps the mapping immutable and optimized for repeated lookups.
-    private static readonly FrozenDictionary<DbDataType, SqlDbType> TypeMap =
-        new Dictionary<DbDataType, SqlDbType>
-        {
-            { DbDataType.String, SqlDbType.NVarChar },
-            { DbDataType.AnsiString, SqlDbType.VarChar },
-            { DbDataType.StringFixed, SqlDbType.NChar },
-            { DbDataType.AnsiStringFixed, SqlDbType.Char },
-            { DbDataType.Clob, SqlDbType.NVarChar },
-            { DbDataType.NClob, SqlDbType.NVarChar },
-
-            { DbDataType.Int16, SqlDbType.SmallInt },
-            { DbDataType.Int32, SqlDbType.Int },
-            { DbDataType.Int64, SqlDbType.BigInt },
-            { DbDataType.Byte, SqlDbType.TinyInt },
-            { DbDataType.SByte, SqlDbType.TinyInt }, // store as tinyint with validation upstream
-            { DbDataType.UInt16, SqlDbType.Int }, // unsupported unsigned; map to larger signed with validation upstream
-            { DbDataType.UInt32, SqlDbType.BigInt },
-            { DbDataType.UInt64, SqlDbType.Decimal },
-            { DbDataType.Decimal, SqlDbType.Decimal },
-            { DbDataType.Double, SqlDbType.Float },
-            { DbDataType.Single, SqlDbType.Real },
-            { DbDataType.Currency, SqlDbType.Money },
-
-            { DbDataType.Boolean, SqlDbType.Bit },
-            { DbDataType.Guid, SqlDbType.UniqueIdentifier },
-
-            { DbDataType.Binary, SqlDbType.VarBinary },
-            { DbDataType.Blob, SqlDbType.VarBinary },
-
-            { DbDataType.Date, SqlDbType.Date },
-            { DbDataType.Time, SqlDbType.Time },
-            { DbDataType.DateTime, SqlDbType.DateTime },
-            { DbDataType.DateTime2, SqlDbType.DateTime2 },
-            { DbDataType.DateTimeOffset, SqlDbType.DateTimeOffset },
-            { DbDataType.Timestamp, SqlDbType.Timestamp },
-            // Interval has no native type in SQL Server; store as time.
-            { DbDataType.Interval, SqlDbType.Time },
-
-            // JSON is stored as NVARCHAR to preserve text encoding.
-            { DbDataType.Json, SqlDbType.NVarChar },
-            { DbDataType.Xml, SqlDbType.Xml }
-        }.ToFrozenDictionary();
-
     #region Public API
     /// <summary>Returns the SqlDbType for the provided DbDataType.</summary>
     public static SqlDbType Map(DbDataType type) =>
-        TypeMap.TryGetValue(type, out var mapped)
-            ? mapped
-            : throw new DatabaseException(ErrorCategory.Unsupported, $"DbDataType '{type}' is not supported.");
+        type switch
+        {
+            DbDataType.String => SqlDbType.NVarChar,
+            DbDataType.AnsiString => SqlDbType.VarChar,
+            DbDataType.StringFixed => SqlDbType.NChar,
+            DbDataType.AnsiStringFixed => SqlDbType.Char,
+            DbDataType.Clob => SqlDbType.NVarChar,
+            DbDataType.NClob => SqlDbType.NVarChar,
+
+            DbDataType.Int16 => SqlDbType.SmallInt,
+            DbDataType.Int32 => SqlDbType.Int,
+            DbDataType.Int64 => SqlDbType.BigInt,
+            DbDataType.Byte => SqlDbType.TinyInt,
+            DbDataType.SByte => SqlDbType.TinyInt, // store as tinyint with validation upstream
+            DbDataType.UInt16 => SqlDbType.Int, // unsupported unsigned; map to larger signed with validation upstream
+            DbDataType.UInt32 => SqlDbType.BigInt,
+            DbDataType.UInt64 => SqlDbType.Decimal,
+            DbDataType.Decimal => SqlDbType.Decimal,
+            DbDataType.Double => SqlDbType.Float,
+            DbDataType.Single => SqlDbType.Real,
+            DbDataType.Currency => SqlDbType.Money,
+
+            DbDataType.Boolean => SqlDbType.Bit,
+            DbDataType.Guid => SqlDbType.UniqueIdentifier,
+
+            DbDataType.Binary => SqlDbType.VarBinary,
+            DbDataType.Blob => SqlDbType.VarBinary,
+
+            DbDataType.Date => SqlDbType.Date,
+            DbDataType.Time => SqlDbType.Time,
+            DbDataType.DateTime => SqlDbType.DateTime,
+            DbDataType.DateTime2 => SqlDbType.DateTime2,
+            DbDataType.DateTimeOffset => SqlDbType.DateTimeOffset,
+            DbDataType.Timestamp => SqlDbType.Timestamp,
+            DbDataType.Interval => SqlDbType.Time,
+
+            DbDataType.Json => SqlDbType.NVarChar,
+            DbDataType.Xml => SqlDbType.Xml,
+
+            _ => throw new NotSupportedException($"DbDataType '{type}' is not supported.")
+        };
     #endregion
 }

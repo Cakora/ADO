@@ -22,23 +22,12 @@ public sealed class DbParameterValidator : AbstractValidator<DbParameter>
             .Must(type => Enum.IsDefined(type))
             .WithMessage("Parameter DbDataType is invalid.");
 
-        RuleFor(x => x.Name)
-            .Must(IsNonWhitespace)
-            .WithMessage("Parameter Name must not be empty or whitespace.");
+        RuleFor(x => x.Name).NotEmpty();
 
         RuleFor(x => x)
-            .Must(p => p.Direction != System.Data.ParameterDirection.Output
-                       || !IsLengthConstrainedType(p.DataType)
-                       || p.Size.HasValue)
-            // Output parameters need explicit sizing to avoid provider defaults.
-            .WithMessage("Output parameters must specify Size when length is constrained.");
-
-        RuleFor(x => x)
-            .Must(p => p.Direction == System.Data.ParameterDirection.Output
+            .Must(p => !IsLengthConstrainedType(p.DataType)
                        || p.Direction == System.Data.ParameterDirection.ReturnValue
-                       || !IsLengthConstrainedType(p.DataType)
                        || p.Size.HasValue)
-            // Size avoids provider defaults that can truncate or over-allocate.
             .WithMessage("String parameters should specify Size when length is constrained.");
 
         RuleFor(x => x)
@@ -51,7 +40,6 @@ public sealed class DbParameterValidator : AbstractValidator<DbParameter>
             .Must(p => p.DataType != DbDataType.Timestamp
                        || p.Value is null
                        || p.Value is not DateTime and not DateTimeOffset)
-            // Timestamp maps to provider-specific rowversion types; reject date/time values early.
             .WithMessage("Timestamp parameters must not use date/time values.");
 
         RuleFor(x => x)
@@ -59,32 +47,11 @@ public sealed class DbParameterValidator : AbstractValidator<DbParameter>
                        && p.DataType != DbDataType.UInt32
                        && p.DataType != DbDataType.UInt64)
             .When(_ => !SupportsUnsignedTypes)
-            // Providers are normalized to signed types; block unsigned to avoid silent truncation.
             .WithMessage("Unsigned types are not supported by the current provider.");
     }
     #endregion
 
     #region Private Helpers
-    private static bool IsNonWhitespace(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return false;
-        }
-
-        // Span-based scan avoids allocation from trimming or splitting.
-        ReadOnlySpan<char> span = value.AsSpan();
-        for (var i = 0; i < span.Length; i++)
-        {
-            if (!char.IsWhiteSpace(span[i]))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private static bool IsLengthConstrainedType(DbDataType dataType) =>
         dataType switch
         {
