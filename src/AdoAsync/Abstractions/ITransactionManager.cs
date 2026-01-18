@@ -13,6 +13,7 @@ public interface ITransactionManager : IAsyncDisposable
 {
     #region Members
     /// <summary>Begins a transaction on the provided open connection.</summary>
+    // Explicit transaction scope keeps retries and lifetimes predictable.
     ValueTask<TransactionHandle> BeginAsync(DbConnection connection, CancellationToken cancellationToken = default);
 
     /// <summary>Commits the active transaction.</summary>

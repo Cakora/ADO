@@ -10,6 +10,7 @@ public sealed record BulkImportColumnMapping
     public required string SourceColumn { get; init; }
 
     /// <summary>Destination column name in the target table.</summary>
+    // Explicit mapping avoids reliance on positional ordering.
     public required string DestinationColumn { get; init; }
     #endregion
 }

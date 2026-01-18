@@ -34,6 +34,7 @@ public enum DbDataType
     /// <summary>Unsigned 32-bit integer.</summary>
     UInt32,
     /// <summary>Unsigned 64-bit integer.</summary>
+    // Mapped to decimal in providers to avoid overflow.
     UInt64,
     /// <summary>Decimal number with precision/scale.</summary>
     Decimal,
@@ -75,6 +76,7 @@ public enum DbDataType
     /// <summary>XML payload.</summary>
     Xml,
     /// <summary>REF CURSOR (Oracle/PostgreSQL).</summary>
+    // Only used for provider-specific multi-result procedures.
     RefCursor
     #endregion
 }

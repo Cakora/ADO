@@ -58,6 +58,7 @@ public class TransactionManagerTests
     #region Test Doubles
     private sealed class FakeDbConnection : DbConnection
     {
+        // Minimal fake to validate transaction lifecycle behavior without a real DB.
         private ConnectionState _state = ConnectionState.Closed;
         private string _connectionString = string.Empty;
 

@@ -14,6 +14,7 @@ public sealed class DatabaseException : Exception
     public DatabaseException(ErrorCategory kind, string message, Exception? innerException = null)
         : base(message, innerException)
     {
+        // Preserve the category so callers can branch without string matching.
         Kind = kind;
     }
 }

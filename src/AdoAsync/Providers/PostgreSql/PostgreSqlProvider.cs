@@ -91,6 +91,7 @@ public sealed class PostgreSqlProvider : IDbProvider
         await using var importer = await npgConnection.BeginBinaryImportAsync(copyCommand, cancellationToken).ConfigureAwait(false);
 
         var columnCount = request.ColumnMappings.Count;
+        // ArrayPool avoids per-import allocations when reading ordinals.
         var ordinals = ArrayPool<int>.Shared.Rent(columnCount);
         try
         {
@@ -148,6 +149,7 @@ public sealed class PostgreSqlProvider : IDbProvider
 
     private static string QuoteIdentifier(ReadOnlySpan<char> identifier)
     {
+        // Quote/escape to preserve case and prevent injection via identifiers.
         var builder = new StringBuilder(identifier.Length + 2);
         var segmentStart = 0;
         var firstSegment = true;
@@ -208,6 +210,7 @@ public sealed class PostgreSqlProvider : IDbProvider
 
             await using var fetch = connection.CreateCommand();
             fetch.Transaction = transaction;
+            // PostgreSQL refcursors must be fetched explicitly within the same transaction.
             fetch.CommandText = $"FETCH ALL IN {QuoteCursorName(cursorName.AsSpan())}";
             await using var reader = await fetch.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             var table = new DataTable();

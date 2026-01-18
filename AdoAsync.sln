@@ -11,6 +11,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{2C82E0E8
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AdoAsync.Tests", "tests\AdoAsync.Tests\AdoAsync.Tests.csproj", "{8D9C9C74-E6D5-45D7-AE1C-98E3DF85D8C2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AdoAsync.Common", "src\AdoAsync.Common\AdoAsync.Common.csproj", "{2A72BA26-6FCF-41AC-AB2B-C0CDFC73BF1E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,9 +30,14 @@ Global
 		{8D9C9C74-E6D5-45D7-AE1C-98E3DF85D8C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8D9C9C74-E6D5-45D7-AE1C-98E3DF85D8C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8D9C9C74-E6D5-45D7-AE1C-98E3DF85D8C2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A72BA26-6FCF-41AC-AB2B-C0CDFC73BF1E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A72BA26-6FCF-41AC-AB2B-C0CDFC73BF1E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A72BA26-6FCF-41AC-AB2B-C0CDFC73BF1E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A72BA26-6FCF-41AC-AB2B-C0CDFC73BF1E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{A08E31C8-565A-4744-967C-461475DF5844} = {6EB90898-7552-4583-9126-2DEE7A6B3078}
 		{8D9C9C74-E6D5-45D7-AE1C-98E3DF85D8C2} = {2C82E0E8-7470-4C1B-965E-C48AC0C45CFE}
+		{2A72BA26-6FCF-41AC-AB2B-C0CDFC73BF1E} = {6EB90898-7552-4583-9126-2DEE7A6B3078}
 	EndGlobalSection
 EndGlobal

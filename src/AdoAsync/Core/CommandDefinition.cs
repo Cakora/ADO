@@ -13,6 +13,7 @@ public sealed record CommandDefinition
     public required string CommandText { get; init; }
 
     /// <summary>Command type (text or stored procedure).</summary>
+    // Avoid implicit detection so call sites are explicit.
     public CommandType CommandType { get; init; } = CommandType.Text;
 
     /// <summary>Parameters for the command.</summary>
@@ -24,12 +25,8 @@ public sealed record CommandDefinition
     /// <summary>
     /// For readers: use default streaming-friendly behavior unless caller overrides.
     /// </summary>
+    // Keeps streaming the default unless a caller opts into buffering behaviors.
     public CommandBehavior Behavior { get; init; } = CommandBehavior.Default;
-
-    /// <summary>
-    /// Allow-list of stored procedures permitted for execution. Required when using stored procedures.
-    /// </summary>
-    public IReadOnlySet<string>? AllowedStoredProcedures { get; init; }
 
     /// <summary>
     /// Allow-list of identifiers permitted for dynamic identifier usage (e.g., table names).

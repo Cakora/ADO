@@ -17,6 +17,7 @@ public class OracleCursorExhaustionTests
         // 2) Execute a stored procedure or query that opens multiple cursors sequentially without closing.
         // 3) Ensure the provider tracks/returns cursor errors as DbErrorType.ResourceLimit and does not retry.
         // 4) Verify cleanup/disposal closes cursors to avoid leaks across executions.
+        // This test remains as documentation until integration infra is available.
         Assert.True(true);
     }
     #endregion

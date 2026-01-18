@@ -15,6 +15,7 @@ public sealed record BulkImportResult
     public int RowsInserted { get; init; }
 
     /// <summary>Elapsed duration for the import.</summary>
+    // Helps callers monitor throughput without extra timers.
     public TimeSpan Duration { get; init; }
 
     /// <summary>Error details when <see cref="Success"/> is false.</summary>

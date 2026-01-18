@@ -14,11 +14,12 @@ public static class PostgreSqlExceptionMapper
     {
         if (exception is not PostgresException pgEx)
         {
-            return DbErrorMapper.Unknown(exception);
+            return DbErrorMapper.Map(exception);
         }
 
         return pgEx.SqlState switch
         {
+            // SQLSTATE values are stable across PostgreSQL versions.
             PostgresErrorCodes.DeadlockDetected => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.Deadlock, Code = DbErrorCode.GenericDeadlock, IsTransient = true },
             PostgresErrorCodes.LockNotAvailable => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.ResourceLimit, Code = DbErrorCode.ResourceLimitExceeded, IsTransient = true },
             PostgresErrorCodes.SerializationFailure => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.Deadlock, Code = DbErrorCode.GenericDeadlock, IsTransient = true },

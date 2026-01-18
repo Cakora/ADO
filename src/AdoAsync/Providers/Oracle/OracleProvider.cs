@@ -102,9 +102,11 @@ public sealed class OracleProvider : IDbProvider
 
         foreach (var mapping in request.ColumnMappings)
         {
+            // Explicit mapping avoids column order assumptions.
             bulkCopy.ColumnMappings.Add(mapping.SourceColumn, mapping.DestinationColumn);
         }
 
+        // Oracle bulk copy is synchronous; check cancellation before the call.
         cancellationToken.ThrowIfCancellationRequested();
         bulkCopy.WriteToServer(request.SourceReader);
         return new ValueTask<int>(rowsCopied);
@@ -115,6 +117,7 @@ public sealed class OracleProvider : IDbProvider
     internal static IReadOnlyList<DataTable> ReadRefCursorResults(DbCommand command)
     {
         var tables = new List<DataTable>();
+        // Oracle exposes result sets via output refcursor parameters.
         foreach (OracleParameter parameter in command.Parameters)
         {
             if (parameter.OracleDbType != OracleDbType.RefCursor)

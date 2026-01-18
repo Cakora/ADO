@@ -22,6 +22,7 @@ public static class RetryPolicyFactory
         // Avoid retries inside caller-managed transactions to prevent partial work repeats.
         if (!options.EnableRetry || isInUserTransaction)
         {
+            // No-op keeps call sites simple while making retries explicitly opt-in.
             return Policy.NoOpAsync();
         }
 
@@ -30,6 +31,7 @@ public static class RetryPolicyFactory
 
         return Policy
             .Handle<Exception>(isTransient)
+            // Fixed delay keeps retry behavior simple and predictable.
             .WaitAndRetryAsync(retryCount, _ => delay);
     }
     #endregion

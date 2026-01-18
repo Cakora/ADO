@@ -26,6 +26,7 @@ public sealed class BulkImportRequestValidator : AbstractValidator<BulkImportReq
 
         RuleFor(x => x.AllowedDestinationTables)
             .NotNull()
+            // Bulk import targets should be explicitly allow-listed to avoid accidental writes.
             .WithMessage("Destination tables must be validated against an allow-list.");
 
         RuleFor(x => x)

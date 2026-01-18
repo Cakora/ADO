@@ -24,6 +24,7 @@ public class ResilienceTests
         var policy = RetryPolicyFactory.Create(options, _ => true, isInUserTransaction: false);
 
         var attempts = 0;
+        // No-op policy should never retry.
         await policy.Awaiting(p => p.ExecuteAsync(async () =>
         {
             await Task.Yield();

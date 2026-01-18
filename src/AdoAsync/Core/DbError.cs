@@ -15,6 +15,7 @@ public sealed record DbError
     public required DbErrorCode Code { get; init; }
 
     /// <summary>Stable key for localization lookup.</summary>
+    // Keep message keys stable so UI can translate without parsing errors.
     public string MessageKey { get; init; } = string.Empty;
 
     /// <summary>Optional parameters for localization formatting.</summary>
@@ -27,6 +28,7 @@ public sealed record DbError
     public bool IsTransient { get; init; }
 
     /// <summary>Optional provider-specific details for diagnostics (never raw exceptions).</summary>
+    // Keep this string-only to avoid leaking exception objects across layers.
     public string? ProviderDetails { get; init; }
     #endregion
 }

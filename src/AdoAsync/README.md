@@ -51,3 +51,91 @@ var request = new BulkImportRequest
 
 var result = await executor.BulkImportAsync(request);
 ```
+
+## Result Shapes (Single + Multi-Result)
+Single SELECT or stored procedure -> `QueryTablesAsync` returns one `DataTable`:
+```csharp
+var result = await executor.QueryTablesAsync(new CommandDefinition
+{
+    CommandText = "select Id, Name from dbo.Customers",
+    CommandType = CommandType.Text
+});
+
+var table = result.Tables![0];
+```
+
+Multi-result stored procedure -> `QueryTablesAsync` returns multiple tables:
+```csharp
+var result = await executor.QueryTablesAsync(new CommandDefinition
+{
+    CommandText = "dbo.GetCustomerAndOrders",
+    CommandType = CommandType.StoredProcedure,
+    Parameters = new[]
+    {
+        new DbParameter
+        {
+            Name = "@customerId",
+            DataType = DbDataType.Int32,
+            Direction = ParameterDirection.Input,
+            Value = 42
+        }
+    }
+});
+
+var customerTable = result.Tables![0];
+var ordersTable = result.Tables![1];
+```
+
+Multi-result -> DataSet:
+```csharp
+var dataSet = new DataSet();
+foreach (var table in result.Tables!)
+{
+    dataSet.Tables.Add(table);
+}
+```
+
+Explicit mapping to custom classes (fast, no reflection):
+```csharp
+await foreach (var customer in executor.QueryAsync(new CommandDefinition
+{
+    CommandText = "select Id, Name from dbo.Customers",
+    CommandType = CommandType.Text
+}, record => new Customer
+{
+    Id = record.GetInt32(0),
+    Name = record.GetString(1)
+}))
+{
+    // use customer
+}
+```
+
+Custom class mapping from DataTable (multi-result example):
+```csharp
+var customers = result.Tables![0]
+    .AsEnumerable()
+    .Select(row => new Customer
+    {
+        Id = row.Field<int>("Id"),
+        Name = row.Field<string>("Name")
+    })
+    .ToArray();
+```
+
+Provider notes:
+- SQL Server: multi-result stored procedures are supported natively.
+- Oracle: multi-result stored procedures use `RefCursor` output parameters.
+- PostgreSQL: multi-result stored procedures use `refcursor` outputs; multi-SELECT SQL text is also supported.
+
+Provider-specific examples:
+- `docs/provider-examples/sqlserver-examples.md`
+- `docs/provider-examples/postgresql-examples.md`
+- `docs/provider-examples/oracle-examples.md`
+
+## Integration Tests (Run Later)
+The integration tests are skipped by default because they require a live database.
+To run them later:
+1) Set `ADOASYNC_TEST_CONNECTION` to a real connection string.
+2) Create stored procedures matching the names in `tests/AdoAsync.Tests/QueryTablesIntegrationTests.cs`.
+3) Remove the `[Skip = ...]` attributes in `tests/AdoAsync.Tests/QueryTablesIntegrationTests.cs`.

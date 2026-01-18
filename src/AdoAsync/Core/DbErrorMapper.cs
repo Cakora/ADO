@@ -20,10 +20,11 @@ public static class DbErrorMapper
             Type = DbErrorType.Unknown,
             Code = DbErrorCode.Unknown,
             MessageKey = "errors.unknown",
-            MessageParameters = new[] { exception.Message },
-            IsTransient = false,
-            ProviderDetails = exception.GetType().FullName
-        };
+                MessageParameters = new[] { exception.Message },
+                IsTransient = false,
+                // Keep provider type name for diagnostics without exposing raw exceptions.
+                ProviderDetails = exception.GetType().FullName
+            };
     }
 
     /// <summary>Maps an exception, optionally overriding provider code/transience.</summary>
@@ -31,6 +32,20 @@ public static class DbErrorMapper
     {
         Validate.Required(exception, nameof(exception));
 
+        if (exception is DatabaseException dbException)
+        {
+            return dbException.Kind switch
+            {
+                ErrorCategory.Validation => Validation(dbException.Message),
+                ErrorCategory.Configuration => Unknown(dbException) with { MessageKey = "errors.configuration" },
+                ErrorCategory.Unsupported => Unknown(dbException) with { MessageKey = "errors.unsupported" },
+                ErrorCategory.State => Unknown(dbException) with { MessageKey = "errors.state" },
+                ErrorCategory.Disposed => Unknown(dbException) with { MessageKey = "errors.disposed" },
+                _ => Unknown(dbException)
+            };
+        }
+
+        // Treat explicit timeouts separately so callers can decide to retry.
         if (exception is TimeoutException)
         {
             return new DbError

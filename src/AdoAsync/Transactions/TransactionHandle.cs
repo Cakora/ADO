@@ -25,6 +25,7 @@ public sealed class TransactionHandle : IAsyncDisposable
 
     #region Public API
     /// <summary>Active transaction instance.</summary>
+    // Expose for provider-specific operations when needed.
     public DbTransaction Transaction => _transaction;
 
     /// <summary>Commits the transaction.</summary>

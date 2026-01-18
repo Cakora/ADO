@@ -50,6 +50,7 @@ public static class ValidationOrchestrator
                 var paramResult = parameterValidator.Validate(param);
                 if (!paramResult.IsValid)
                 {
+                    // Return first parameter error to keep payload small and actionable.
                     return ToError(paramResult.Errors);
                 }
             }

@@ -10,6 +10,7 @@ namespace AdoAsync.Providers.Oracle;
 /// </summary>
 public static class OracleTypeMapper
 {
+    // FrozenDictionary avoids repeated allocations on hot mapping paths.
     private static readonly FrozenDictionary<DbDataType, OracleDbType> MapTable =
         new Dictionary<DbDataType, OracleDbType>
         {
@@ -27,6 +28,7 @@ public static class OracleTypeMapper
             [DbDataType.SByte] = OracleDbType.Byte,
             [DbDataType.UInt16] = OracleDbType.Int32,
             [DbDataType.UInt32] = OracleDbType.Int64,
+            // Unsigned 64-bit maps to decimal to preserve range.
             [DbDataType.UInt64] = OracleDbType.Decimal,
             [DbDataType.Decimal] = OracleDbType.Decimal,
             [DbDataType.Double] = OracleDbType.Double,
@@ -49,6 +51,7 @@ public static class OracleTypeMapper
 
             [DbDataType.Json] = OracleDbType.NVarchar2,
             [DbDataType.Xml] = OracleDbType.XmlType,
+            // RefCursor is required for Oracle multi-result procedures.
             [DbDataType.RefCursor] = OracleDbType.RefCursor
         }.ToFrozenDictionary();
 

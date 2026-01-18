@@ -18,6 +18,7 @@ public interface IDbProvider
     DbCommand CreateCommand(DbConnection connection, CommandDefinition definition);
 
     /// <summary>Applies parameters to a provider-specific command.</summary>
+    // Separation keeps provider specifics out of the executor.
     void ApplyParameters(DbCommand command, IEnumerable<DbParameter> parameters);
 
     /// <summary>Performs a provider-specific bulk import and returns the inserted row count.</summary>

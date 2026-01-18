@@ -89,6 +89,7 @@ public class ValidationTests
     public void DbParameterValidator_BlocksUnsignedTypes()
     {
         var validator = new DbParameterValidator();
+        // Unsigned values are blocked to keep provider behavior consistent.
         var parameter = new DbParameter
         {
             Name = "p",
@@ -243,7 +244,7 @@ public class ValidationTests
     }
 
     [Fact]
-    public void CommandDefinitionValidator_RequiresStoredProcedureAllowList()
+    public void CommandDefinitionValidator_AllowsStoredProcedureWithoutAllowList()
     {
         var validator = new CommandDefinitionValidator();
         var definition = new CommandDefinition
@@ -255,25 +256,7 @@ public class ValidationTests
 
         var result = validator.Validate(definition);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("allow-list"));
-    }
-
-    [Fact]
-    public void CommandDefinitionValidator_RejectsStoredProcedureNotInAllowList()
-    {
-        var validator = new CommandDefinitionValidator();
-        var definition = new CommandDefinition
-        {
-            CommandText = "usp_DoThing",
-            CommandType = CommandType.StoredProcedure,
-            Parameters = Array.Empty<DbParameter>(),
-            AllowedStoredProcedures = new HashSet<string> { "usp_SafeProc" }
-        };
-
-        var result = validator.Validate(definition);
-
-        result.IsValid.Should().BeFalse();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]

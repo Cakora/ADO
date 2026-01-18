@@ -10,6 +10,7 @@ namespace AdoAsync.Providers.PostgreSql;
 /// </summary>
 public static class PostgreSqlTypeMapper
 {
+    // FrozenDictionary avoids repeated allocations on hot mapping paths.
     private static readonly FrozenDictionary<DbDataType, NpgsqlDbType> MapTable =
         new Dictionary<DbDataType, NpgsqlDbType>
         {
@@ -27,6 +28,7 @@ public static class PostgreSqlTypeMapper
             [DbDataType.SByte] = NpgsqlDbType.Smallint,
             [DbDataType.UInt16] = NpgsqlDbType.Integer,
             [DbDataType.UInt32] = NpgsqlDbType.Bigint,
+            // Unsigned 64-bit maps to numeric to avoid overflow.
             [DbDataType.UInt64] = NpgsqlDbType.Numeric,
             [DbDataType.Decimal] = NpgsqlDbType.Numeric,
             [DbDataType.Double] = NpgsqlDbType.Double,
@@ -49,6 +51,7 @@ public static class PostgreSqlTypeMapper
 
             [DbDataType.Json] = NpgsqlDbType.Jsonb,
             [DbDataType.Xml] = NpgsqlDbType.Xml,
+            // Refcursor enables multi-result stored procedures in PostgreSQL.
             [DbDataType.RefCursor] = NpgsqlDbType.Refcursor
         }.ToFrozenDictionary();
 

@@ -81,66 +81,81 @@ public sealed class DbExecutor : IDbExecutor
     #endregion
 
     #region Public API
-    /// <inheritdoc />
+    /// <summary>Execute a command that returns only a row count.</summary>
     public async ValueTask<int> ExecuteAsync(CommandDefinition command, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
         var validationError = ValidationOrchestrator.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
-            throw new DatabaseException(ErrorCategory.Validation, validationError.MessageKey);
+            throw new DbClientException(validationError);
         }
 
-        return await _retryPolicy.ExecuteAsync(async ct =>
+        try
         {
-            await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
-            return await dbCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        }, cancellationToken).ConfigureAwait(false);
+            return await _retryPolicy.ExecuteAsync(async ct =>
+            {
+                await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
+                return await dbCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            throw WrapException(ex);
+        }
     }
 
-    /// <inheritdoc />
+    /// <summary>Execute a command and convert the scalar result to <typeparamref name="T"/>.</summary>
     public async ValueTask<T> ExecuteScalarAsync<T>(CommandDefinition command, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
         var validationError = ValidationOrchestrator.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
-            throw new DatabaseException(ErrorCategory.Validation, validationError.MessageKey);
+            throw new DbClientException(validationError);
         }
 
-        return await _retryPolicy.ExecuteAsync(async ct =>
+        try
         {
-            await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
-            var value = await dbCommand.ExecuteScalarAsync(ct).ConfigureAwait(false);
-            if (value is null or DBNull)
+            return await _retryPolicy.ExecuteAsync(async ct =>
             {
-                return default!;
-            }
+                await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
+                var value = await dbCommand.ExecuteScalarAsync(ct).ConfigureAwait(false);
+                if (value is null or DBNull)
+                {
+                    return default!;
+                }
 
-            if (value is T typed)
-            {
-                return typed;
-            }
+                if (value is T typed)
+                {
+                    return typed;
+                }
 
-            return (T)Convert.ChangeType(value, typeof(T));
-        }, cancellationToken).ConfigureAwait(false);
+                // Convert.ChangeType keeps scalar conversions consistent across providers.
+                return (T)Convert.ChangeType(value, typeof(T));
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            throw WrapException(ex);
+        }
     }
 
-    /// <inheritdoc />
+    /// <summary>Stream rows with an explicit mapper for high performance.</summary>
     public IAsyncEnumerable<T> QueryAsync<T>(CommandDefinition command, Func<IDataRecord, T> map, CancellationToken cancellationToken = default)
     {
         Validate.Required(map, nameof(map));
         var validationError = ValidationOrchestrator.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
-            throw new DatabaseException(ErrorCategory.Validation, validationError.MessageKey);
+            throw new DbClientException(validationError);
         }
 
         // Keep explicit mapping here; automatic mapping can wrap this method later without touching the execution path.
         return QueryAsyncIterator(command, map, cancellationToken);
     }
 
-    /// <inheritdoc />
+    /// <summary>Materialize result sets into tables for callers that need DataTable/DataSet.</summary>
     public async ValueTask<DbResult> QueryTablesAsync(CommandDefinition command, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
@@ -167,6 +182,7 @@ public sealed class DbExecutor : IDbExecutor
                 await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
                 var tables = new List<DataTable>();
 
+                // Default behavior keeps provider defaults while enabling NextResult for multi-sets.
                 await using var reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.Default, ct).ConfigureAwait(false);
                 do
                 {
@@ -178,18 +194,19 @@ public sealed class DbExecutor : IDbExecutor
                 return new DbResult
                 {
                     Success = true,
-                    Tables = tables
+                    Tables = tables,
+                    OutputParameters = ExtractOutputParameters(dbCommand, command.Parameters)
                 };
             }, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            var error = MapProviderError(_options.DatabaseType, ex);
+            var error = MapError(ex);
             return new DbResult { Success = false, Error = error };
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>Bulk import data using provider-specific fast paths.</summary>
     public async ValueTask<BulkImportResult> BulkImportAsync(BulkImportRequest request, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
@@ -218,12 +235,12 @@ public sealed class DbExecutor : IDbExecutor
         }
         catch (Exception ex)
         {
-            var error = MapProviderError(_options.DatabaseType, ex);
+            var error = MapError(ex);
             return new BulkImportResult { Success = false, Error = error };
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>Dispose the shared connection if this executor created it.</summary>
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
@@ -269,12 +286,14 @@ public sealed class DbExecutor : IDbExecutor
     }
 
     private bool ShouldUseOracleRefCursorPath(CommandDefinition command) =>
+        // Oracle returns ref cursors as output parameters instead of result sets.
         _options.DatabaseType == DatabaseType.Oracle
         && command.CommandType == CommandType.StoredProcedure
         && command.Parameters is { Count: > 0 }
         && command.Parameters.Any(p => p.DataType == DbDataType.RefCursor);
 
     private bool ShouldUsePostgresRefCursorPath(CommandDefinition command) =>
+        // PostgreSQL refcursors must be fetched explicitly, so we switch to a dedicated path.
         _options.DatabaseType == DatabaseType.PostgreSql
         && command.CommandType == CommandType.StoredProcedure
         && command.Parameters is { Count: > 0 }
@@ -293,13 +312,14 @@ public sealed class DbExecutor : IDbExecutor
                 return new DbResult
                 {
                     Success = true,
-                    Tables = tables
+                    Tables = tables,
+                    OutputParameters = ExtractOutputParameters(dbCommand, command.Parameters)
                 };
             }, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            var error = MapProviderError(_options.DatabaseType, ex);
+            var error = MapError(ex);
             return new DbResult { Success = false, Error = error };
         }
     }
@@ -311,6 +331,7 @@ public sealed class DbExecutor : IDbExecutor
             return await _retryPolicy.ExecuteAsync(async ct =>
             {
                 await EnsureConnectionAsync(ct).ConfigureAwait(false);
+                // Refcursor fetches require a transaction scope in PostgreSQL.
                 await using var transaction = await _connection!.BeginTransactionAsync(ct).ConfigureAwait(false);
                 await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
                 dbCommand.Transaction = transaction;
@@ -327,7 +348,8 @@ public sealed class DbExecutor : IDbExecutor
                     return new DbResult
                     {
                         Success = true,
-                        Tables = tables
+                        Tables = tables,
+                        OutputParameters = ExtractOutputParameters(dbCommand, command.Parameters)
                     };
                 }
                 catch
@@ -339,9 +361,67 @@ public sealed class DbExecutor : IDbExecutor
         }
         catch (Exception ex)
         {
-            var error = MapProviderError(_options.DatabaseType, ex);
+            var error = MapError(ex);
             return new DbResult { Success = false, Error = error };
         }
+    }
+
+    private static IReadOnlyDictionary<string, object?>? ExtractOutputParameters(
+        DbCommand command,
+        IReadOnlyList<DbParameter>? parameters)
+    {
+        if (command.Parameters.Count == 0)
+        {
+            return null;
+        }
+
+        Dictionary<string, DbParameter>? parameterLookup = null;
+        if (parameters is { Count: > 0 })
+        {
+            parameterLookup = new Dictionary<string, DbParameter>(StringComparer.OrdinalIgnoreCase);
+            foreach (var parameter in parameters)
+            {
+                var name = TrimParameterPrefix(parameter.Name);
+                parameterLookup[name] = parameter;
+            }
+        }
+
+        Dictionary<string, object?>? outputValues = null;
+        foreach (System.Data.Common.DbParameter parameter in command.Parameters)
+        {
+            if (parameter.Direction == ParameterDirection.Input)
+            {
+                continue;
+            }
+
+            outputValues ??= new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            var name = TrimParameterPrefix(parameter.ParameterName);
+            if (parameterLookup is not null && parameterLookup.TryGetValue(name, out var definition))
+            {
+                if (definition.DataType == DbDataType.RefCursor)
+                {
+                    continue;
+                }
+
+                outputValues[name] = OutputParameterConverter.Normalize(parameter.Value, definition.DataType);
+            }
+            else
+            {
+                outputValues[name] = parameter.Value is DBNull ? null : parameter.Value;
+            }
+        }
+
+        return outputValues;
+    }
+
+    private static string TrimParameterPrefix(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return name;
+        }
+
+        return name[0] is '@' or ':' or '?' ? name[1..] : name;
     }
 
     private async IAsyncEnumerable<T> QueryAsyncIterator<T>(
@@ -351,9 +431,27 @@ public sealed class DbExecutor : IDbExecutor
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
 
-        await foreach (var item in ExecuteQueryAsync(command, map, cancellationToken).ConfigureAwait(false))
+        await using var enumerator = ExecuteQueryAsync(command, map, cancellationToken)
+            .GetAsyncEnumerator(cancellationToken);
+
+        while (true)
         {
-            yield return item;
+            T current;
+            try
+            {
+                if (!await enumerator.MoveNextAsync().ConfigureAwait(false))
+                {
+                    yield break;
+                }
+
+                current = enumerator.Current;
+            }
+            catch (Exception ex)
+            {
+                throw WrapException(ex);
+            }
+
+            yield return current;
         }
     }
 
@@ -378,6 +476,27 @@ public sealed class DbExecutor : IDbExecutor
             throw new DatabaseException(ErrorCategory.Disposed, "DbExecutor has been disposed.");
         }
         await Task.CompletedTask;
+    }
+
+    private DbClientException WrapException(Exception exception)
+    {
+        if (exception is DbClientException clientException)
+        {
+            return clientException;
+        }
+
+        var error = MapError(exception);
+        return new DbClientException(error, exception);
+    }
+
+    private DbError MapError(Exception exception)
+    {
+        if (exception is DbClientException clientException)
+        {
+            return clientException.Error;
+        }
+
+        return MapProviderError(_options.DatabaseType, exception);
     }
 
     private static IDbProvider ResolveProvider(DatabaseType databaseType) =>

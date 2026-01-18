@@ -11,6 +11,7 @@ namespace AdoAsync.Providers.SqlServer;
 /// </summary>
 public static class SqlServerTypeMapper
 {
+    // FrozenDictionary avoids repeated allocations on hot mapping paths.
     private static readonly FrozenDictionary<DbDataType, SqlDbType> MapTable =
         new Dictionary<DbDataType, SqlDbType>
         {
@@ -28,6 +29,7 @@ public static class SqlServerTypeMapper
             [DbDataType.SByte] = SqlDbType.TinyInt, // store as tinyint with validation upstream
             [DbDataType.UInt16] = SqlDbType.Int, // unsupported unsigned; map to larger signed with validation upstream
             [DbDataType.UInt32] = SqlDbType.BigInt,
+            // Unsigned 64-bit uses decimal to preserve range.
             [DbDataType.UInt64] = SqlDbType.Decimal,
             [DbDataType.Decimal] = SqlDbType.Decimal,
             [DbDataType.Double] = SqlDbType.Float,

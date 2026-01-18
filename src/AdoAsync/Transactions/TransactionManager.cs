@@ -43,6 +43,7 @@ public sealed class TransactionManager : ITransactionManager
 
         if (connection.State != ConnectionState.Open)
         {
+            // Ensure the transaction is bound to an open connection.
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -80,6 +81,7 @@ public sealed class TransactionManager : ITransactionManager
         {
             if (!_committed)
             {
+                // Safety net: avoid leaving open transactions when callers forget to commit.
                 await _transaction.RollbackAsync().ConfigureAwait(false);
             }
 

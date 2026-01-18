@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- Keep tests aligned with library quality bar. -->
     <WarningsAsErrors>true</WarningsAsErrors>
   </PropertyGroup>
 

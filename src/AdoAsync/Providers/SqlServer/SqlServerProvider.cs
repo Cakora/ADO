@@ -48,12 +48,14 @@ public sealed class SqlServerProvider : IDbProvider
             var sqlParam = new SqlParameter
             {
                 ParameterName = param.Name,
+                // ADO.NET providers expect DBNull for nulls.
                 Value = param.Value ?? DBNull.Value,
                 Direction = param.Direction
             };
 
             if (param.Size.HasValue)
             {
+                // Explicit size avoids provider defaults that can truncate outputs.
                 sqlParam.Size = param.Size.Value;
             }
 
@@ -86,6 +88,7 @@ public sealed class SqlServerProvider : IDbProvider
         using var bulkCopy = new SqlBulkCopy(sqlConnection)
         {
             DestinationTableName = request.DestinationTable,
+            // Stream rows to keep memory usage stable on large imports.
             EnableStreaming = true,
             NotifyAfter = 1
         };

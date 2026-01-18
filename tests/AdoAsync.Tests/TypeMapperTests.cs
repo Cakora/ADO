@@ -27,6 +27,7 @@ public class TypeMapperTests
     [Fact]
     public void PostgreSqlTypeMapper_MapsRefCursor()
     {
+        // Refcursor mapping enables PostgreSQL multi-result procedures.
         PostgreSqlTypeMapper.Map(DbDataType.RefCursor).Should().Be(NpgsqlTypes.NpgsqlDbType.Refcursor);
     }
 
@@ -40,6 +41,7 @@ public class TypeMapperTests
     [Fact]
     public void OracleTypeMapper_MapsRefCursor()
     {
+        // Refcursor mapping enables Oracle multi-result procedures.
         OracleTypeMapper.Map(DbDataType.RefCursor).Should().Be(Oracle.ManagedDataAccess.Client.OracleDbType.RefCursor);
     }
 

@@ -29,6 +29,7 @@ public sealed class DbParameterValidator : AbstractValidator<DbParameter>
             .When(p => p.Direction is System.Data.ParameterDirection.Output
                 or System.Data.ParameterDirection.InputOutput
                 or System.Data.ParameterDirection.ReturnValue)
+            // Output parameters need explicit sizing across providers.
             .WithMessage("Output parameters must specify Size.");
 
         RuleFor(x => x)
@@ -53,6 +54,7 @@ public sealed class DbParameterValidator : AbstractValidator<DbParameter>
                        && p.DataType != DbDataType.UInt32
                        && p.DataType != DbDataType.UInt64)
             .When(_ => !SupportsUnsignedTypes)
+            // Keep unsigned disabled to avoid silent overflow across providers.
             .WithMessage("Unsigned types are not supported by the current provider.");
 
         RuleFor(x => x)
@@ -60,6 +62,7 @@ public sealed class DbParameterValidator : AbstractValidator<DbParameter>
                        || p.Direction is System.Data.ParameterDirection.Output
                        or System.Data.ParameterDirection.InputOutput
                        or System.Data.ParameterDirection.ReturnValue)
+            // RefCursor is a provider feature (Oracle/PostgreSQL) and only valid as an output.
             .WithMessage("RefCursor parameters must be Output or InputOutput.");
     }
     #endregion

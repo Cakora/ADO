@@ -14,11 +14,12 @@ public static class OracleExceptionMapper
     {
         if (exception is not OracleException oraEx)
         {
-            return DbErrorMapper.Unknown(exception);
+            return DbErrorMapper.Map(exception);
         }
 
         return oraEx.Number switch
         {
+            // Oracle error numbers are the most reliable cross-version signal.
             1013 => DbErrorMapper.Unknown(oraEx) with { Type = DbErrorType.Timeout, Code = DbErrorCode.GenericTimeout, IsTransient = true },
             12170 => DbErrorMapper.Unknown(oraEx) with { Type = DbErrorType.Timeout, Code = DbErrorCode.GenericTimeout, IsTransient = true },
             12514 or 12541 => DbErrorMapper.Unknown(oraEx) with { Type = DbErrorType.ConnectionFailure, Code = DbErrorCode.ConnectionLost, IsTransient = true },

@@ -12,6 +12,7 @@ public sealed class DbOptionsValidator : AbstractValidator<DbOptions>
         RuleFor(x => x.ConnectionString)
             .NotEmpty()
             .When(x => x.DataSource is null)
+            // Either DataSource or ConnectionString is required to create connections.
             .WithMessage("ConnectionString is required when DataSource is not provided.");
         RuleFor(x => x.CommandTimeoutSeconds).GreaterThan(0);
         RuleFor(x => x.RetryCount).GreaterThanOrEqualTo(0);

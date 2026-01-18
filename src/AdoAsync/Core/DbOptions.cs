@@ -15,6 +15,7 @@ public sealed record DbOptions
     public required string ConnectionString { get; init; }
 
     /// <summary>Command timeout in seconds.</summary>
+    // Shared default keeps behavior consistent across commands.
     public required int CommandTimeoutSeconds { get; init; }
 
     /// <summary>Enables diagnostics collection.</summary>
@@ -23,7 +24,9 @@ public sealed record DbOptions
     /// <summary>Enables FluentValidation checks.</summary>
     public bool EnableValidation { get; init; } = true;
 
+
     /// <summary>Enables Polly-backed retries.</summary>
+    // Keep retries opt-in to avoid surprising at-least-once semantics.
     public bool EnableRetry { get; init; } = false;
 
     /// <summary>Retry count when retries are enabled.</summary>
@@ -35,6 +38,7 @@ public sealed record DbOptions
     /// <summary>
     /// Optional provider data source; when set, connections are created from this data source instead of the raw connection string.
     /// </summary>
+    // Useful for providers that expose pooling or advanced connection creation APIs.
     public DbDataSource? DataSource { get; init; }
     #endregion
 }

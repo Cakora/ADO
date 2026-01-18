@@ -13,6 +13,7 @@ public sealed record BulkImportRequest
     public required string DestinationTable { get; init; }
 
     /// <summary>Source reader supplying rows.</summary>
+    // DbDataReader keeps bulk import streaming and avoids buffering.
     public required DbDataReader SourceReader { get; init; }
 
     /// <summary>Column mappings (source → destination).</summary>

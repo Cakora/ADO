@@ -23,6 +23,7 @@ public interface IDbExecutor : IAsyncDisposable
     IAsyncEnumerable<T> QueryAsync<T>(CommandDefinition command, Func<IDataRecord, T> map, CancellationToken cancellationToken = default);
 
     /// <summary>Executes a command and materializes results into tables (allocation-heavy).</summary>
+    // Use when streaming isn't an option (e.g., DataSet/DataTable consumers).
     ValueTask<DbResult> QueryTablesAsync(CommandDefinition command, CancellationToken cancellationToken = default);
 
     /// <summary>Performs a bulk import into a destination table.</summary>

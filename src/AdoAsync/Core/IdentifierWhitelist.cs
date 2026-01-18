@@ -4,24 +4,12 @@ using System.Collections.Generic;
 namespace AdoAsync;
 
 /// <summary>
-/// Helper to enforce allow-list rules for stored procedure names and identifiers.
-/// Caller is responsible for supplying controlled allow lists.
+/// Helper to enforce allow-list rules for identifiers.
+/// Caller is responsible for supplying controlled allow lists when used.
 /// </summary>
 public static class IdentifierWhitelist
 {
     #region Public API
-    /// <summary>Throws if the stored procedure is not in the allow-list.</summary>
-    public static void EnsureStoredProcedureAllowed(string procedureName, IReadOnlySet<string> allowedProcedures)
-    {
-        Validate.Required(procedureName, nameof(procedureName));
-        Validate.Required(allowedProcedures, nameof(allowedProcedures));
-
-        if (!allowedProcedures.Contains(procedureName))
-        {
-            throw new DatabaseException(ErrorCategory.Validation, $"Stored procedure '{procedureName}' is not in the allowed list.");
-        }
-    }
-
     /// <summary>Throws if the identifier is not in the allow-list.</summary>
     public static void EnsureIdentifierAllowed(string identifier, IReadOnlySet<string> allowedIdentifiers)
     {
@@ -42,6 +30,7 @@ public static class IdentifierWhitelist
 
         foreach (var identifier in identifiers)
         {
+            // Fail fast on the first disallowed identifier for clearer errors.
             EnsureIdentifierAllowed(identifier, allowedIdentifiers);
         }
     }

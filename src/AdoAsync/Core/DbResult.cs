@@ -14,12 +14,14 @@ public sealed record DbResult
     public bool Success { get; init; }
 
     /// <summary>Scalar value (if applicable).</summary>
+    // Keeps a single result path for ExecuteScalar-like calls.
     public object? ScalarValue { get; init; }
 
     /// <summary>Materialized tables (allocation-heavy).</summary>
     public IReadOnlyList<DataTable>? Tables { get; init; }
 
     /// <summary>Output parameter values keyed by name.</summary>
+    // Names are normalized (prefix trimmed) for cross-provider consistency.
     public IReadOnlyDictionary<string, object?>? OutputParameters { get; init; }
 
     /// <summary>Execution duration.</summary>
