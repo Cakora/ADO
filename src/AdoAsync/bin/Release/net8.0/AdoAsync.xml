@@ -1,0 +1,657 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>AdoAsync</name>
+    </assembly>
+    <members>
+        <member name="T:AdoAsync.Abstractions.IDbExecutor">
+            <summary>
+            Facade surface for executing database commands (async-only). Streaming is preferred; materialization is explicit. Not thread-safe; honor cancellation on all methods; retries/transactions are explicit.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Abstractions.IDbExecutor.ExecuteAsync(AdoAsync.CommandDefinition,System.Threading.CancellationToken)">
+            <summary>Executes a non-query command.</summary>
+        </member>
+        <member name="M:AdoAsync.Abstractions.IDbExecutor.ExecuteScalarAsync``1(AdoAsync.CommandDefinition,System.Threading.CancellationToken)">
+            <summary>Executes a scalar command and returns the value converted to <typeparamref name="T"/>.</summary>
+        </member>
+        <member name="M:AdoAsync.Abstractions.IDbExecutor.QueryAsync``1(AdoAsync.CommandDefinition,System.Func{System.Data.IDataRecord,``0},System.Threading.CancellationToken)">
+            <summary>Streams rows and maps each record via the provided mapper.</summary>
+        </member>
+        <member name="M:AdoAsync.Abstractions.IDbExecutor.QueryTablesAsync(AdoAsync.CommandDefinition,System.Threading.CancellationToken)">
+            <summary>Executes a command and materializes results into tables (allocation-heavy).</summary>
+        </member>
+        <member name="M:AdoAsync.Abstractions.IDbExecutor.BulkImportAsync(AdoAsync.BulkImportRequest,System.Threading.CancellationToken)">
+            <summary>Performs a bulk import into a destination table.</summary>
+        </member>
+        <member name="T:AdoAsync.Abstractions.IDbProvider">
+            <summary>
+            Provider-specific factory and bindings. Contains no implementation logic here.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Abstractions.IDbProvider.CreateConnection(System.String)">
+            <summary>Creates a provider-specific connection.</summary>
+        </member>
+        <member name="M:AdoAsync.Abstractions.IDbProvider.CreateCommand(System.Data.Common.DbConnection,AdoAsync.CommandDefinition)">
+            <summary>Creates a provider-specific command based on the definition.</summary>
+        </member>
+        <member name="M:AdoAsync.Abstractions.IDbProvider.ApplyParameters(System.Data.Common.DbCommand,System.Collections.Generic.IEnumerable{AdoAsync.DbParameter})">
+            <summary>Applies parameters to a provider-specific command.</summary>
+        </member>
+        <member name="M:AdoAsync.Abstractions.IDbProvider.BulkImportAsync(System.Data.Common.DbConnection,AdoAsync.BulkImportRequest,System.Threading.CancellationToken)">
+            <summary>Performs a provider-specific bulk import and returns the inserted row count.</summary>
+        </member>
+        <member name="T:AdoAsync.Abstractions.ITransactionManager">
+            <summary>
+            Explicit transaction contracts (Approach A).
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Abstractions.ITransactionManager.BeginAsync(System.Data.Common.DbConnection,System.Threading.CancellationToken)">
+            <summary>Begins a transaction on the provided open connection.</summary>
+        </member>
+        <member name="M:AdoAsync.Abstractions.ITransactionManager.CommitAsync(System.Threading.CancellationToken)">
+            <summary>Commits the active transaction.</summary>
+        </member>
+        <member name="M:AdoAsync.Abstractions.ITransactionManager.RollbackAsync(System.Threading.CancellationToken)">
+            <summary>Rolls back the active transaction.</summary>
+        </member>
+        <member name="T:AdoAsync.BulkImportColumnMapping">
+            <summary>
+            Maps a source column to a destination column for bulk import.
+            </summary>
+        </member>
+        <member name="P:AdoAsync.BulkImportColumnMapping.SourceColumn">
+            <summary>Source column name in the reader.</summary>
+        </member>
+        <member name="P:AdoAsync.BulkImportColumnMapping.DestinationColumn">
+            <summary>Destination column name in the target table.</summary>
+        </member>
+        <member name="T:AdoAsync.BulkImportRequest">
+            <summary>
+            Provider-agnostic bulk import request.
+            </summary>
+        </member>
+        <member name="P:AdoAsync.BulkImportRequest.DestinationTable">
+            <summary>Destination table name (must be allow-listed).</summary>
+        </member>
+        <member name="P:AdoAsync.BulkImportRequest.SourceReader">
+            <summary>Source reader supplying rows.</summary>
+        </member>
+        <member name="P:AdoAsync.BulkImportRequest.ColumnMappings">
+            <summary>Column mappings (source → destination).</summary>
+        </member>
+        <member name="P:AdoAsync.BulkImportRequest.BatchSize">
+            <summary>Optional batch size for providers that support it.</summary>
+        </member>
+        <member name="P:AdoAsync.BulkImportRequest.AllowedDestinationTables">
+            <summary>Allow-list of destination tables (required for validation).</summary>
+        </member>
+        <member name="P:AdoAsync.BulkImportRequest.AllowedDestinationColumns">
+            <summary>Allow-list of destination columns (required when identifiers are supplied).</summary>
+        </member>
+        <member name="T:AdoAsync.BulkImportResult">
+            <summary>
+            Result contract for bulk import operations.
+            </summary>
+        </member>
+        <member name="P:AdoAsync.BulkImportResult.Success">
+            <summary>Indicates whether the operation succeeded.</summary>
+        </member>
+        <member name="P:AdoAsync.BulkImportResult.RowsInserted">
+            <summary>Total rows inserted.</summary>
+        </member>
+        <member name="P:AdoAsync.BulkImportResult.Duration">
+            <summary>Elapsed duration for the import.</summary>
+        </member>
+        <member name="P:AdoAsync.BulkImportResult.Error">
+            <summary>Error details when <see cref="P:AdoAsync.BulkImportResult.Success"/> is false.</summary>
+        </member>
+        <member name="T:AdoAsync.CommandDefinition">
+            <summary>
+            Command definition for text and stored procedures. No execution logic lives here.
+            </summary>
+        </member>
+        <member name="P:AdoAsync.CommandDefinition.CommandText">
+            <summary>SQL text or stored procedure name.</summary>
+        </member>
+        <member name="P:AdoAsync.CommandDefinition.CommandType">
+            <summary>Command type (text or stored procedure).</summary>
+        </member>
+        <member name="P:AdoAsync.CommandDefinition.Parameters">
+            <summary>Parameters for the command.</summary>
+        </member>
+        <member name="P:AdoAsync.CommandDefinition.CommandTimeoutSeconds">
+            <summary>Optional per-command timeout (seconds). If null, use default from options.</summary>
+        </member>
+        <member name="P:AdoAsync.CommandDefinition.Behavior">
+            <summary>
+            For readers: use default streaming-friendly behavior unless caller overrides.
+            </summary>
+        </member>
+        <member name="P:AdoAsync.CommandDefinition.AllowedStoredProcedures">
+            <summary>
+            Allow-list of stored procedures permitted for execution. Required when using stored procedures.
+            </summary>
+        </member>
+        <member name="P:AdoAsync.CommandDefinition.AllowedIdentifiers">
+            <summary>
+            Allow-list of identifiers permitted for dynamic identifier usage (e.g., table names).
+            </summary>
+        </member>
+        <member name="P:AdoAsync.CommandDefinition.IdentifiersToValidate">
+            <summary>
+            Identifiers that will be used in the command and must be validated against <see cref="P:AdoAsync.CommandDefinition.AllowedIdentifiers"/>.
+            </summary>
+        </member>
+        <member name="T:AdoAsync.DbDataType">
+            <summary>
+            Cross-provider data types for parameters.
+            </summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.String">
+            <summary>Unicode variable-length string.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.AnsiString">
+            <summary>ANSI variable-length string.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.StringFixed">
+            <summary>Unicode fixed-length string.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.AnsiStringFixed">
+            <summary>ANSI fixed-length string.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Clob">
+            <summary>Large text (CLOB).</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.NClob">
+            <summary>Large Unicode text (NCLOB).</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Int16">
+            <summary>16-bit integer.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Int32">
+            <summary>32-bit integer.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Int64">
+            <summary>64-bit integer.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Byte">
+            <summary>Unsigned byte.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.SByte">
+            <summary>Signed byte.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.UInt16">
+            <summary>Unsigned 16-bit integer.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.UInt32">
+            <summary>Unsigned 32-bit integer.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.UInt64">
+            <summary>Unsigned 64-bit integer.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Decimal">
+            <summary>Decimal number with precision/scale.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Double">
+            <summary>Double precision floating point.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Single">
+            <summary>Single precision floating point.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Currency">
+            <summary>Currency/money type.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Boolean">
+            <summary>Boolean value.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Guid">
+            <summary>GUID/UUID.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Binary">
+            <summary>Binary data.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Blob">
+            <summary>Large binary object.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Date">
+            <summary>Date only.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Time">
+            <summary>Time only.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.DateTime">
+            <summary>Legacy date+time.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.DateTime2">
+            <summary>Preferred precise date+time.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.DateTimeOffset">
+            <summary>Date+time with offset.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Timestamp">
+            <summary>Rowversion/timestamp.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Interval">
+            <summary>Interval/duration.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Json">
+            <summary>JSON payload.</summary>
+        </member>
+        <member name="F:AdoAsync.DbDataType.Xml">
+            <summary>XML payload.</summary>
+        </member>
+        <member name="T:AdoAsync.DbError">
+            <summary>
+            Provider-agnostic error contract suitable for middleware and localization.
+            </summary>
+        </member>
+        <member name="P:AdoAsync.DbError.Type">
+            <summary>Error category.</summary>
+        </member>
+        <member name="P:AdoAsync.DbError.Code">
+            <summary>Stable error code.</summary>
+        </member>
+        <member name="P:AdoAsync.DbError.MessageKey">
+            <summary>Stable key for localization lookup.</summary>
+        </member>
+        <member name="P:AdoAsync.DbError.MessageParameters">
+            <summary>Optional parameters for localization formatting.</summary>
+        </member>
+        <member name="P:AdoAsync.DbError.LocalizedMessage">
+            <summary>Optional localized message (if available).</summary>
+        </member>
+        <member name="P:AdoAsync.DbError.IsTransient">
+            <summary>Indicates whether the error is considered transient.</summary>
+        </member>
+        <member name="P:AdoAsync.DbError.ProviderDetails">
+            <summary>Optional provider-specific details for diagnostics (never raw exceptions).</summary>
+        </member>
+        <member name="T:AdoAsync.DbErrorType">
+            <summary>Top-level error categories.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorType.Timeout">
+            <summary>Execution timed out.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorType.Deadlock">
+            <summary>Deadlock detected.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorType.ConnectionFailure">
+            <summary>Connection failure.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorType.ResourceLimit">
+            <summary>Resource limit reached.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorType.ValidationError">
+            <summary>Validation failure.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorType.SyntaxError">
+            <summary>SQL or command syntax error.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorType.Unknown">
+            <summary>Unclassified error.</summary>
+        </member>
+        <member name="T:AdoAsync.DbErrorCode">
+            <summary>Stable error codes.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorCode.GenericTimeout">
+            <summary>Timeout occurred.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorCode.GenericDeadlock">
+            <summary>Deadlock occurred.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorCode.ConnectionLost">
+            <summary>Connection lost.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorCode.ResourceLimitExceeded">
+            <summary>Resource limit exceeded.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorCode.ValidationFailed">
+            <summary>Validation failed.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorCode.SyntaxError">
+            <summary>Syntax error.</summary>
+        </member>
+        <member name="F:AdoAsync.DbErrorCode.Unknown">
+            <summary>Unclassified error.</summary>
+        </member>
+        <member name="T:AdoAsync.DbErrorMapper">
+            <summary>
+            Maps exceptions to the provider-agnostic DbError contract.
+            Extend with provider-specific translations in provider namespaces.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.DbErrorMapper.Unknown(System.Exception)">
+            <summary>Returns an unknown error shape for the given exception.</summary>
+        </member>
+        <member name="M:AdoAsync.DbErrorMapper.Map(System.Exception,System.String,System.Nullable{System.Boolean})">
+            <summary>Maps an exception, optionally overriding provider code/transience.</summary>
+        </member>
+        <member name="M:AdoAsync.DbErrorMapper.Validation(System.String,System.Collections.Generic.IEnumerable{System.String})">
+            <summary>Creates a validation error from message/parameters.</summary>
+        </member>
+        <member name="T:AdoAsync.DbOptions">
+            <summary>
+            Provider-agnostic database options. Contains no logic or environment reads.
+            </summary>
+        </member>
+        <member name="P:AdoAsync.DbOptions.DatabaseType">
+            <summary>Target database provider.</summary>
+        </member>
+        <member name="P:AdoAsync.DbOptions.ConnectionString">
+            <summary>Connection string for the chosen provider.</summary>
+        </member>
+        <member name="P:AdoAsync.DbOptions.CommandTimeoutSeconds">
+            <summary>Command timeout in seconds.</summary>
+        </member>
+        <member name="P:AdoAsync.DbOptions.EnableDiagnostics">
+            <summary>Enables diagnostics collection.</summary>
+        </member>
+        <member name="P:AdoAsync.DbOptions.EnableValidation">
+            <summary>Enables FluentValidation checks.</summary>
+        </member>
+        <member name="P:AdoAsync.DbOptions.EnableRetry">
+            <summary>Enables Polly-backed retries.</summary>
+        </member>
+        <member name="P:AdoAsync.DbOptions.RetryCount">
+            <summary>Retry count when retries are enabled.</summary>
+        </member>
+        <member name="P:AdoAsync.DbOptions.RetryDelayMilliseconds">
+            <summary>Delay (milliseconds) between retries when enabled.</summary>
+        </member>
+        <member name="P:AdoAsync.DbOptions.DataSource">
+            <summary>
+            Optional provider data source; when set, connections are created from this data source instead of the raw connection string.
+            </summary>
+        </member>
+        <member name="T:AdoAsync.DatabaseType">
+            <summary>Supported database providers.</summary>
+        </member>
+        <member name="F:AdoAsync.DatabaseType.SqlServer">
+            <summary>Microsoft SQL Server.</summary>
+        </member>
+        <member name="F:AdoAsync.DatabaseType.PostgreSql">
+            <summary>PostgreSQL.</summary>
+        </member>
+        <member name="F:AdoAsync.DatabaseType.Oracle">
+            <summary>Oracle Database.</summary>
+        </member>
+        <member name="T:AdoAsync.DbParameter">
+            <summary>
+            Database-agnostic parameter definition. Contains no execution logic.
+            </summary>
+        </member>
+        <member name="P:AdoAsync.DbParameter.Name">
+            <summary>Parameter name (include prefix as required by provider).</summary>
+        </member>
+        <member name="P:AdoAsync.DbParameter.DataType">
+            <summary>Cross-provider data type.</summary>
+        </member>
+        <member name="P:AdoAsync.DbParameter.Direction">
+            <summary>Parameter direction.</summary>
+        </member>
+        <member name="P:AdoAsync.DbParameter.Value">
+            <summary>Parameter value.</summary>
+        </member>
+        <member name="P:AdoAsync.DbParameter.Size">
+            <summary>
+            Size is mandatory for output string/binary parameters and encouraged for variable-length inputs when known.
+            </summary>
+        </member>
+        <member name="P:AdoAsync.DbParameter.Precision">
+            <summary>Optional precision for decimals.</summary>
+        </member>
+        <member name="P:AdoAsync.DbParameter.Scale">
+            <summary>Optional scale for decimals.</summary>
+        </member>
+        <member name="T:AdoAsync.DbResult">
+            <summary>
+            Result envelope for command execution. Supports scalar, materialized tables, output parameters, duration, retry count, and errors.
+            </summary>
+        </member>
+        <member name="P:AdoAsync.DbResult.Success">
+            <summary>Indicates overall success.</summary>
+        </member>
+        <member name="P:AdoAsync.DbResult.ScalarValue">
+            <summary>Scalar value (if applicable).</summary>
+        </member>
+        <member name="P:AdoAsync.DbResult.Tables">
+            <summary>Materialized tables (allocation-heavy).</summary>
+        </member>
+        <member name="P:AdoAsync.DbResult.OutputParameters">
+            <summary>Output parameter values keyed by name.</summary>
+        </member>
+        <member name="P:AdoAsync.DbResult.ExecutionDuration">
+            <summary>Execution duration.</summary>
+        </member>
+        <member name="P:AdoAsync.DbResult.RetryCount">
+            <summary>Retry count applied during execution.</summary>
+        </member>
+        <member name="P:AdoAsync.DbResult.Error">
+            <summary>Error details when unsuccessful.</summary>
+        </member>
+        <member name="T:AdoAsync.Execution.DbExecutor">
+            <summary>
+            Orchestrates validation → resilience → provider → ADO.NET. Not thread-safe. Streaming by default; materialization is explicit and allocation-heavy. Retries are Polly-based and opt-in; cancellation is honored on all async calls; transactions are explicit via the transaction manager.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Execution.DbExecutor.Create(AdoAsync.DbOptions,System.Boolean)">
+            <summary>Creates a new executor for the specified options.</summary>
+        </member>
+        <member name="M:AdoAsync.Execution.DbExecutor.ExecuteAsync(AdoAsync.CommandDefinition,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:AdoAsync.Execution.DbExecutor.ExecuteScalarAsync``1(AdoAsync.CommandDefinition,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:AdoAsync.Execution.DbExecutor.QueryAsync``1(AdoAsync.CommandDefinition,System.Func{System.Data.IDataRecord,``0},System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:AdoAsync.Execution.DbExecutor.QueryTablesAsync(AdoAsync.CommandDefinition,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:AdoAsync.Execution.DbExecutor.BulkImportAsync(AdoAsync.BulkImportRequest,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:AdoAsync.Execution.DbExecutor.DisposeAsync">
+            <inheritdoc />
+        </member>
+        <member name="T:AdoAsync.IdentifierWhitelist">
+            <summary>
+            Helper to enforce allow-list rules for stored procedure names and identifiers.
+            Caller is responsible for supplying controlled allow lists.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.IdentifierWhitelist.EnsureStoredProcedureAllowed(System.String,System.Collections.Generic.IReadOnlySet{System.String})">
+            <summary>Throws if the stored procedure is not in the allow-list.</summary>
+        </member>
+        <member name="M:AdoAsync.IdentifierWhitelist.EnsureIdentifierAllowed(System.String,System.Collections.Generic.IReadOnlySet{System.String})">
+            <summary>Throws if the identifier is not in the allow-list.</summary>
+        </member>
+        <member name="M:AdoAsync.IdentifierWhitelist.EnsureIdentifiersAllowed(System.Collections.Generic.IEnumerable{System.String},System.Collections.Generic.IReadOnlySet{System.String})">
+            <summary>Throws if any identifier in the sequence is not in the allow-list.</summary>
+        </member>
+        <member name="T:AdoAsync.Providers.Oracle.OracleExceptionMapper">
+            <summary>
+            Translates Oracle exceptions to DbError categories/codes.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Providers.Oracle.OracleExceptionMapper.Map(System.Exception)">
+            <summary>Maps Oracle exceptions to provider-agnostic errors.</summary>
+        </member>
+        <member name="T:AdoAsync.Providers.Oracle.OracleProvider">
+            <summary>
+            Oracle provider implementation (parameter mapping and error translation).
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Providers.Oracle.OracleProvider.CreateConnection(System.String)">
+            <summary>Creates an Oracle connection.</summary>
+        </member>
+        <member name="M:AdoAsync.Providers.Oracle.OracleProvider.CreateCommand(System.Data.Common.DbConnection,AdoAsync.CommandDefinition)">
+            <summary>Creates an Oracle command.</summary>
+        </member>
+        <member name="M:AdoAsync.Providers.Oracle.OracleProvider.ApplyParameters(System.Data.Common.DbCommand,System.Collections.Generic.IEnumerable{AdoAsync.DbParameter})">
+            <summary>Applies parameters to an Oracle command (cursor handling must be explicit).</summary>
+        </member>
+        <member name="M:AdoAsync.Providers.Oracle.OracleProvider.BulkImportAsync(System.Data.Common.DbConnection,AdoAsync.BulkImportRequest,System.Threading.CancellationToken)">
+            <summary>Performs Oracle bulk import via OracleBulkCopy.</summary>
+        </member>
+        <member name="T:AdoAsync.Providers.Oracle.OracleTypeMapper">
+            <summary>
+            Maps DbDataType to OracleDbType.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Providers.Oracle.OracleTypeMapper.Map(AdoAsync.DbDataType)">
+            <summary>Returns the OracleDbType for the provided DbDataType.</summary>
+        </member>
+        <member name="T:AdoAsync.Providers.PostgreSql.PostgreSqlExceptionMapper">
+            <summary>
+            Translates PostgreSQL exceptions to DbError categories/codes.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Providers.PostgreSql.PostgreSqlExceptionMapper.Map(System.Exception)">
+            <summary>Maps Npgsql exceptions to provider-agnostic errors.</summary>
+        </member>
+        <member name="T:AdoAsync.Providers.PostgreSql.PostgreSqlProvider">
+            <summary>
+            PostgreSQL provider implementation (parameter mapping and error translation).
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Providers.PostgreSql.PostgreSqlProvider.CreateConnection(System.String)">
+            <summary>Creates a PostgreSQL connection.</summary>
+        </member>
+        <member name="M:AdoAsync.Providers.PostgreSql.PostgreSqlProvider.CreateCommand(System.Data.Common.DbConnection,AdoAsync.CommandDefinition)">
+            <summary>Creates a PostgreSQL command.</summary>
+        </member>
+        <member name="M:AdoAsync.Providers.PostgreSql.PostgreSqlProvider.ApplyParameters(System.Data.Common.DbCommand,System.Collections.Generic.IEnumerable{AdoAsync.DbParameter})">
+            <summary>Applies parameters to a PostgreSQL command.</summary>
+        </member>
+        <member name="M:AdoAsync.Providers.PostgreSql.PostgreSqlProvider.BulkImportAsync(System.Data.Common.DbConnection,AdoAsync.BulkImportRequest,System.Threading.CancellationToken)">
+            <summary>Performs PostgreSQL bulk import via COPY binary.</summary>
+        </member>
+        <member name="T:AdoAsync.Providers.PostgreSql.PostgreSqlTypeMapper">
+            <summary>
+            Maps DbDataType to NpgsqlDbType.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Providers.PostgreSql.PostgreSqlTypeMapper.Map(AdoAsync.DbDataType)">
+            <summary>Returns the NpgsqlDbType for the provided DbDataType.</summary>
+        </member>
+        <member name="T:AdoAsync.Providers.SqlServer.SqlServerExceptionMapper">
+            <summary>
+            Translates SQL Server exceptions to DbError categories/codes.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Providers.SqlServer.SqlServerExceptionMapper.Map(System.Exception)">
+            <summary>Maps SQL exceptions to provider-agnostic errors.</summary>
+        </member>
+        <member name="T:AdoAsync.Providers.SqlServer.SqlServerProvider">
+            <summary>
+            SQL Server provider implementation (parameter mapping and error translation).
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Providers.SqlServer.SqlServerProvider.CreateConnection(System.String)">
+            <summary>Creates a SQL Server connection.</summary>
+        </member>
+        <member name="M:AdoAsync.Providers.SqlServer.SqlServerProvider.CreateCommand(System.Data.Common.DbConnection,AdoAsync.CommandDefinition)">
+            <summary>Creates a SQL Server command.</summary>
+        </member>
+        <member name="M:AdoAsync.Providers.SqlServer.SqlServerProvider.ApplyParameters(System.Data.Common.DbCommand,System.Collections.Generic.IEnumerable{AdoAsync.DbParameter})">
+            <summary>Applies parameters to a SQL Server command.</summary>
+        </member>
+        <member name="M:AdoAsync.Providers.SqlServer.SqlServerProvider.BulkImportAsync(System.Data.Common.DbConnection,AdoAsync.BulkImportRequest,System.Threading.CancellationToken)">
+            <summary>Performs SQL Server bulk import via SqlBulkCopy.</summary>
+        </member>
+        <member name="T:AdoAsync.Providers.SqlServer.SqlServerTypeMapper">
+            <summary>
+            Maps DbDataType to SqlDbType.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Providers.SqlServer.SqlServerTypeMapper.Map(AdoAsync.DbDataType)">
+            <summary>Returns the SqlDbType for the provided DbDataType.</summary>
+        </member>
+        <member name="T:AdoAsync.Resilience.RetryPolicyFactory">
+            <summary>
+            Builds Polly retry policies based on DbOptions. No hidden retries.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Resilience.RetryPolicyFactory.Create(AdoAsync.DbOptions,System.Func{System.Exception,System.Boolean},System.Boolean)">
+            <summary>Creates a retry policy from options and transient predicate; disabled for user transactions.</summary>
+        </member>
+        <member name="T:AdoAsync.Transactions.TransactionHandle">
+            <summary>
+            Handle wrapper to expose the active transaction and ensure rollback-on-dispose.
+            </summary>
+        </member>
+        <member name="P:AdoAsync.Transactions.TransactionHandle.Transaction">
+            <summary>Active transaction instance.</summary>
+        </member>
+        <member name="M:AdoAsync.Transactions.TransactionHandle.CommitAsync(System.Threading.CancellationToken)">
+            <summary>Commits the transaction.</summary>
+        </member>
+        <member name="M:AdoAsync.Transactions.TransactionHandle.RollbackAsync(System.Threading.CancellationToken)">
+            <summary>Rolls back the transaction.</summary>
+        </member>
+        <member name="M:AdoAsync.Transactions.TransactionHandle.DisposeAsync">
+            <summary>Disposes the transaction, rolling back if not committed.</summary>
+        </member>
+        <member name="T:AdoAsync.Transactions.TransactionManager">
+            <summary>
+            Explicit transaction manager (Approach A) with rollback-on-dispose semantics.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Transactions.TransactionManager.#ctor(System.Data.Common.DbConnection)">
+            <summary>Creates a transaction manager bound to the provided connection.</summary>
+        </member>
+        <member name="M:AdoAsync.Transactions.TransactionManager.BeginAsync(System.Data.Common.DbConnection,System.Threading.CancellationToken)">
+            <summary>Begins a transaction on the provided connection.</summary>
+        </member>
+        <member name="M:AdoAsync.Transactions.TransactionManager.CommitAsync(System.Threading.CancellationToken)">
+            <summary>Commits the active transaction.</summary>
+        </member>
+        <member name="M:AdoAsync.Transactions.TransactionManager.RollbackAsync(System.Threading.CancellationToken)">
+            <summary>Rolls back the active transaction.</summary>
+        </member>
+        <member name="M:AdoAsync.Transactions.TransactionManager.DisposeAsync">
+            <summary>Disposes the transaction, rolling back if not committed.</summary>
+        </member>
+        <member name="T:AdoAsync.Validation.BulkImportRequestValidator">
+            <summary>Validates bulk import requests.</summary>
+        </member>
+        <member name="M:AdoAsync.Validation.BulkImportRequestValidator.#ctor">
+            <summary>Creates the validator with required rules.</summary>
+        </member>
+        <member name="T:AdoAsync.Validation.CommandDefinitionValidator">
+            <summary>Validates command definitions.</summary>
+        </member>
+        <member name="M:AdoAsync.Validation.CommandDefinitionValidator.#ctor">
+            <summary>Creates the validator with required rules.</summary>
+        </member>
+        <member name="T:AdoAsync.Validation.DbOptionsValidator">
+            <summary>Validates database options.</summary>
+        </member>
+        <member name="M:AdoAsync.Validation.DbOptionsValidator.#ctor">
+            <summary>Creates the validator with required rules.</summary>
+        </member>
+        <member name="T:AdoAsync.Validation.DbParameterValidator">
+            <summary>Validates parameters for correctness and provider support.</summary>
+        </member>
+        <member name="M:AdoAsync.Validation.DbParameterValidator.#ctor">
+            <summary>Creates the validator with required rules.</summary>
+        </member>
+        <member name="T:AdoAsync.Validation.ValidationOrchestrator">
+            <summary>
+            Runs validators when enabled and maps failures to DbError.
+            </summary>
+        </member>
+        <member name="M:AdoAsync.Validation.ValidationOrchestrator.ValidateOptions(AdoAsync.DbOptions,System.Boolean,FluentValidation.IValidator{AdoAsync.DbOptions})">
+            <summary>Validates options when enabled.</summary>
+        </member>
+        <member name="M:AdoAsync.Validation.ValidationOrchestrator.ValidateCommand(AdoAsync.CommandDefinition,System.Boolean,FluentValidation.IValidator{AdoAsync.CommandDefinition},FluentValidation.IValidator{AdoAsync.DbParameter})">
+            <summary>Validates a command and its parameters when enabled.</summary>
+        </member>
+        <member name="M:AdoAsync.Validation.ValidationOrchestrator.ValidateBulkImport(AdoAsync.BulkImportRequest,System.Boolean,FluentValidation.IValidator{AdoAsync.BulkImportRequest})">
+            <summary>Validates bulk import requests when enabled.</summary>
+        </member>
+    </members>
+</doc>

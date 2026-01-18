@@ -1,0 +1,63 @@
+name: ci
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  build-test-pack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore AdoAsync.sln
+
+      - name: Build (Release, warnings as errors)
+        run: dotnet build AdoAsync.sln -c Release --no-restore
+
+      - name: Test (Release)
+        run: dotnet test AdoAsync.sln -c Release --no-build
+
+      - name: Vulnerability scan
+        run: dotnet list AdoAsync.sln package --vulnerable
+
+      - name: Deprecated package scan
+        run: dotnet list AdoAsync.sln package --deprecated
+
+      - name: Pack
+        run: dotnet pack src/AdoAsync/AdoAsync.csproj -c Release --no-build
+
+  sonar:
+    needs: build-test-pack
+    runs-on: ubuntu-latest
+    if: ${{ env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' && env.SONAR_PROJECT_KEY != '' }}
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install SonarScanner
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: SonarQube Analysis
+        run: |
+          dotnet sonarscanner begin /k:"$SONAR_PROJECT_KEY" /d:sonar.host.url="$SONAR_HOST_URL" /d:sonar.login="$SONAR_TOKEN"
+          dotnet build AdoAsync.sln -c Release
+          dotnet sonarscanner end /d:sonar.login="$SONAR_TOKEN"

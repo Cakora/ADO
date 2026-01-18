@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>AdoAsync</id>
+    <version>1.0.0</version>
+    <authors>AdoAsync</authors>
+    <readme>README.md</readme>
+    <description>Package Description</description>
+    <repository type="git" />
+    <dependencies>
+      <group targetFramework="net8.0">
+        <dependency id="FluentValidation" version="12.1.1" exclude="Build,Analyzers" />
+        <dependency id="FluentValidation.DependencyInjectionExtensions" version="12.1.1" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Data.SqlClient" version="6.1.4" exclude="Build,Analyzers" />
+        <dependency id="Npgsql" version="10.0.1" exclude="Build,Analyzers" />
+        <dependency id="Oracle.ManagedDataAccess.Core" version="23.26.0" exclude="Build,Analyzers" />
+        <dependency id="Polly" version="8.6.5" exclude="Build,Analyzers" />
+        <dependency id="System.Data.SqlClient" version="4.9.0" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="/Users/pranavpatil/Desktop/ADO ASYNC/src/AdoAsync/bin/Release/net8.0/AdoAsync.dll" target="lib/net8.0/AdoAsync.dll" />
+    <file src="/Users/pranavpatil/Desktop/ADO ASYNC/src/AdoAsync/bin/Release/net8.0/AdoAsync.xml" target="lib/net8.0/AdoAsync.xml" />
+    <file src="/Users/pranavpatil/Desktop/ADO ASYNC/src/AdoAsync/README.md" target="README.md" />
+  </files>
+</package>

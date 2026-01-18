@@ -1,0 +1,130 @@
+{
+  "format": 1,
+  "restore": {
+    "/Users/pranavpatil/Desktop/ADO ASYNC/examples/AdoAsync.Demo/AdoAsync.Demo.csproj": {}
+  },
+  "projects": {
+    "/Users/pranavpatil/Desktop/ADO ASYNC/examples/AdoAsync.Demo/AdoAsync.Demo.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/Users/pranavpatil/Desktop/ADO ASYNC/examples/AdoAsync.Demo/AdoAsync.Demo.csproj",
+        "projectName": "AdoAsync.Demo",
+        "projectPath": "/Users/pranavpatil/Desktop/ADO ASYNC/examples/AdoAsync.Demo/AdoAsync.Demo.csproj",
+        "packagesPath": "/Users/pranavpatil/.nuget/packages/",
+        "outputPath": "/Users/pranavpatil/Desktop/ADO ASYNC/examples/AdoAsync.Demo/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/Users/pranavpatil/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "/usr/local/share/dotnet/library-packs": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "/Users/pranavpatil/Desktop/ADO ASYNC/src/AdoAsync/AdoAsync.csproj": {
+                "projectPath": "/Users/pranavpatil/Desktop/ADO ASYNC/src/AdoAsync/AdoAsync.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/8.0.416/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "/Users/pranavpatil/Desktop/ADO ASYNC/src/AdoAsync/AdoAsync.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/Users/pranavpatil/Desktop/ADO ASYNC/src/AdoAsync/AdoAsync.csproj",
+        "projectName": "AdoAsync",
+        "projectPath": "/Users/pranavpatil/Desktop/ADO ASYNC/src/AdoAsync/AdoAsync.csproj",
+        "packagesPath": "/Users/pranavpatil/.nuget/packages/",
+        "outputPath": "/Users/pranavpatil/Desktop/ADO ASYNC/src/AdoAsync/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/Users/pranavpatil/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "/usr/local/share/dotnet/library-packs": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/8.0.416/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}
