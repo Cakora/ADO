@@ -33,6 +33,71 @@ See `IMPLEMENTATION_GUIDE.md` for the full behavior and guardrails.
 
 You can also supply a provider `DbDataSource` via `DbOptions.DataSource` to reuse configured data sources when supported by your provider.
 
+## Read Patterns (3 ways)
+
+### 1) Simple Reader (ADO.NET)
+This is the classic `ExecuteReader` pattern (direct ADO.NET, not via `DbExecutor`):
+```csharp
+using System.Data;
+using System.Data.Common;
+
+await using DbConnection conn = new Microsoft.Data.SqlClient.SqlConnection(options.ConnectionString);
+await conn.OpenAsync();
+
+await using var cmd = conn.CreateCommand();
+cmd.CommandText = "select Id, Name from dbo.Customers";
+cmd.CommandType = CommandType.Text;
+
+await using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.Default);
+while (await reader.ReadAsync())
+{
+    var id = reader.GetInt64(0);
+    var name = reader.GetString(1);
+}
+```
+
+### 2) Streaming (AdoAsync)
+Best for high performance and low memory (row-by-row):
+```csharp
+using System.Data;
+using AdoAsync.Common;
+
+await foreach (var customer in executor.QueryAsync(
+    new CommandDefinition
+    {
+        CommandText = "select Id, Name from dbo.Customers",
+        CommandType = CommandType.Text
+    },
+    record => new Customer
+    {
+        Id = record.Get<long>(0),
+        Name = record.Get<string>(1)
+    }))
+{
+    // process customer
+}
+```
+
+### 3) DataTable (AdoAsync)
+Easy, but buffers all rows (materialized):
+```csharp
+using System.Data;
+using System.Linq;
+
+var result = await executor.QueryTablesAsync(new CommandDefinition
+{
+    CommandText = "select Id, Name from dbo.Customers",
+    CommandType = CommandType.Text
+});
+
+var table = result.Tables![0];
+foreach (DataRow row in table.Rows)
+{
+    var id = (long)row["Id"];
+    var name = (string)row["Name"];
+}
+```
+
 ## Bulk Import (Optional)
 ```csharp
 using var reader = GetSourceReader();
