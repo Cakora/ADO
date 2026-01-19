@@ -102,7 +102,7 @@ public sealed class DbExecutor : IDbExecutor
 
         try
         {
-            return await _retryPolicy.ExecuteAsync(async ct =>
+            return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
                 await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
                 return await dbCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
@@ -126,7 +126,7 @@ public sealed class DbExecutor : IDbExecutor
 
         try
         {
-            return await _retryPolicy.ExecuteAsync(async ct =>
+            return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
                 await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
                 var value = await dbCommand.ExecuteScalarAsync(ct).ConfigureAwait(false);
@@ -186,7 +186,7 @@ public sealed class DbExecutor : IDbExecutor
 
         try
         {
-            return await _retryPolicy.ExecuteAsync(async ct =>
+            return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
                 await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
                 var tables = new List<DataTable>();
@@ -228,11 +228,20 @@ public sealed class DbExecutor : IDbExecutor
 
         try
         {
-            return await _retryPolicy.ExecuteAsync(async ct =>
+            return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
                 await EnsureConnectionAsync(ct).ConfigureAwait(false);
                 var started = Stopwatch.StartNew();
-                var rows = await _provider.BulkImportAsync(_connection!, request, ct).ConfigureAwait(false);
+                var normalizedRequest = request;
+                if (_options.DatabaseType == DatabaseType.Oracle)
+                {
+                    normalizedRequest = request with
+                    {
+                        DestinationTable = IdentifierNormalization.NormalizeTableName(_options.DatabaseType, request.DestinationTable)
+                    };
+                }
+
+                var rows = await _provider.BulkImportAsync(_connection!, _activeTransaction, normalizedRequest, ct).ConfigureAwait(false);
                 started.Stop();
                 return new BulkImportResult
                 {
@@ -268,7 +277,7 @@ public sealed class DbExecutor : IDbExecutor
 
         try
         {
-            return await _retryPolicy.ExecuteAsync(async ct =>
+            return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
                 await EnsureConnectionAsync(ct).ConfigureAwait(false);
                 var started = Stopwatch.StartNew();
@@ -308,7 +317,7 @@ public sealed class DbExecutor : IDbExecutor
 
         try
         {
-            return await _retryPolicy.ExecuteAsync(async ct =>
+            return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
                 await EnsureConnectionAsync(ct).ConfigureAwait(false);
                 var started = Stopwatch.StartNew();
@@ -416,7 +425,7 @@ public sealed class DbExecutor : IDbExecutor
     {
         try
         {
-            return await _retryPolicy.ExecuteAsync(async ct =>
+            return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
                 await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
                 await dbCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
@@ -441,7 +450,7 @@ public sealed class DbExecutor : IDbExecutor
     {
         try
         {
-            return await _retryPolicy.ExecuteAsync(async ct =>
+            return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
                 await EnsureConnectionAsync(ct).ConfigureAwait(false);
                 // Refcursor fetches require a transaction scope in PostgreSQL.
@@ -601,6 +610,17 @@ public sealed class DbExecutor : IDbExecutor
             throw new DatabaseException(ErrorCategory.Disposed, "DbExecutor has been disposed.");
         }
         await Task.CompletedTask;
+    }
+
+    private Task<T> ExecuteWithRetryIfAllowedAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
+    {
+        // Never retry inside an explicit user transaction; keep at-most-once semantics.
+        if (_activeTransaction is not null || !_options.EnableRetry)
+        {
+            return action(cancellationToken);
+        }
+
+        return _retryPolicy.ExecuteAsync(action, cancellationToken);
     }
 
     private DbClientException WrapException(Exception exception)

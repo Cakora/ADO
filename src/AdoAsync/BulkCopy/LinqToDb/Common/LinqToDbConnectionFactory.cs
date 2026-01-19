@@ -1,6 +1,5 @@
 using System;
 using System.Data.Common;
-using System.Globalization;
 using LinqToDB;
 using LinqToDB.Data;
 using LinqToDB.DataProvider;
@@ -40,29 +39,7 @@ internal sealed class LinqToDbConnectionFactory
             return tableName;
         }
 
-        if (_databaseType != DatabaseType.Oracle)
-        {
-            return tableName;
-        }
-
-        // Oracle folds unquoted identifiers to uppercase. Preserve quoted identifiers.
-        if (tableName.Contains('"', StringComparison.Ordinal))
-        {
-            return tableName;
-        }
-
-        var parts = tableName.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length == 0)
-        {
-            return tableName;
-        }
-
-        for (var i = 0; i < parts.Length; i++)
-        {
-            parts[i] = parts[i].ToUpper(CultureInfo.InvariantCulture);
-        }
-
-        return string.Join('.', parts);
+        return IdentifierNormalization.NormalizeTableName(_databaseType, tableName);
     }
 
     private IDataProvider ResolveProvider()

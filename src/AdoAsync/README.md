@@ -52,6 +52,24 @@ var request = new BulkImportRequest
 var result = await executor.BulkImportAsync(request);
 ```
 
+## Transactions
+All commands and bulk imports enlist in an explicit executor transaction when started via `BeginTransactionAsync`.
+If any operation fails, disposing the transaction handle without committing will roll back everything.
+
+```csharp
+await using var executor = DbExecutor.Create(options);
+
+await using var tx = await executor.BeginTransactionAsync();
+
+var first = await executor.BulkImportAsync(firstRequest);
+if (!first.Success) throw new Exception(first.Error!.MessageKey);
+
+var second = await executor.BulkImportAsync(secondRequest);
+if (!second.Success) throw new Exception(second.Error!.MessageKey);
+
+await tx.CommitAsync();
+```
+
 ## Result Shapes (Single + Multi-Result)
 Single SELECT or stored procedure -> `QueryTablesAsync` returns one `DataTable`:
 ```csharp

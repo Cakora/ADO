@@ -75,7 +75,7 @@ public sealed class SqlServerProvider : IDbProvider
     }
 
     /// <summary>Performs SQL Server bulk import via SqlBulkCopy.</summary>
-    public async ValueTask<int> BulkImportAsync(DbConnection connection, BulkImportRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<int> BulkImportAsync(DbConnection connection, DbTransaction? transaction, BulkImportRequest request, CancellationToken cancellationToken = default)
     {
         Validate.Required(connection, nameof(connection));
         Validate.Required(request, nameof(request));
@@ -85,7 +85,16 @@ public sealed class SqlServerProvider : IDbProvider
             throw new DatabaseException(ErrorCategory.Configuration, "SQL Server bulk import requires a SqlConnection.");
         }
 
-        using var bulkCopy = new SqlBulkCopy(sqlConnection)
+        var sqlTransaction = transaction switch
+        {
+            null => null,
+            SqlTransaction t => t,
+            _ => throw new DatabaseException(ErrorCategory.Configuration, "SQL Server bulk import requires a SqlTransaction when a transaction is provided.")
+        };
+
+        using var bulkCopy = sqlTransaction is null
+            ? new SqlBulkCopy(sqlConnection)
+            : new SqlBulkCopy(sqlConnection, SqlBulkCopyOptions.Default, sqlTransaction)
         {
             DestinationTableName = request.DestinationTable,
             // Stream rows to keep memory usage stable on large imports.

@@ -76,7 +76,7 @@ public sealed class OracleProvider : IDbProvider
     }
 
     /// <summary>Performs Oracle bulk import via OracleBulkCopy.</summary>
-    public ValueTask<int> BulkImportAsync(DbConnection connection, BulkImportRequest request, CancellationToken cancellationToken = default)
+    public ValueTask<int> BulkImportAsync(DbConnection connection, DbTransaction? transaction, BulkImportRequest request, CancellationToken cancellationToken = default)
     {
         Validate.Required(connection, nameof(connection));
         Validate.Required(request, nameof(request));
@@ -84,6 +84,11 @@ public sealed class OracleProvider : IDbProvider
         if (connection is not OracleConnection oracleConnection)
         {
             throw new DatabaseException(ErrorCategory.Configuration, "Oracle bulk import requires an OracleConnection.");
+        }
+
+        if (transaction is not null && transaction is not OracleTransaction)
+        {
+            throw new DatabaseException(ErrorCategory.Configuration, "Oracle bulk import requires an OracleTransaction when a transaction is provided.");
         }
 
         using var bulkCopy = new OracleBulkCopy(oracleConnection)

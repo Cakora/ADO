@@ -22,6 +22,6 @@ public interface IDbProvider
     void ApplyParameters(DbCommand command, IEnumerable<DbParameter> parameters);
 
     /// <summary>Performs a provider-specific bulk import and returns the inserted row count.</summary>
-    ValueTask<int> BulkImportAsync(DbConnection connection, BulkImportRequest request, CancellationToken cancellationToken = default);
+    ValueTask<int> BulkImportAsync(DbConnection connection, DbTransaction? transaction, BulkImportRequest request, CancellationToken cancellationToken = default);
     #endregion
 }

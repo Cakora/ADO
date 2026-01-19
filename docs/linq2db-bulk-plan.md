@@ -52,6 +52,27 @@ Approach B: Typed bulk (for POCO-based bulk ops)
    - `BulkCopyType` (Default/ProviderSpecific), `KeepIdentity`, `CheckConstraints`, `MaxDegreeOfParallelism`, `NotifyAfter`, `BatchSize`, `Timeout`, `UseTableLock`, `SkipOnDuplicate`.
    - Optional callbacks: `OnRowsCopied` to surface progress.
 
+## Transactions (all-or-nothing)
+- Use `DbExecutor.BeginTransactionAsync()` to start an explicit transaction.
+- All `Execute*`, `QueryTablesAsync`, and both bulk import paths enlist in the active transaction.
+- If any bulk operation fails, do not commit; disposing the transaction handle rolls back everything.
+
+Example (two different bulk options in one transaction):
+```csharp
+var options = new DbOptions { /* ... */ LinqToDb = new LinqToDbBulkOptions { Enable = true } };
+await using var executor = DbExecutor.Create(options);
+
+await using var tx = await executor.BeginTransactionAsync();
+
+var first = await executor.BulkImportAsync(items1, tableName: "A_TABLE", bulkOptions: new LinqToDbBulkOptions { MaxBatchSize = 10_000 });
+if (!first.Success) throw new Exception(first.Error!.MessageKey);
+
+var second = await executor.BulkImportAsync(items2, tableName: "B_TABLE", bulkOptions: new LinqToDbBulkOptions { KeepIdentity = true });
+if (!second.Success) throw new Exception(second.Error!.MessageKey);
+
+await tx.CommitAsync();
+```
+
 ## Testing plan
 - Unit tests (no DB):
   - `BulkCopyOptionsMapper` maps batch size, identity, constraints, column mappings correctly.

@@ -77,7 +77,7 @@ public sealed class PostgreSqlProvider : IDbProvider
     }
 
     /// <summary>Performs PostgreSQL bulk import via COPY binary.</summary>
-    public async ValueTask<int> BulkImportAsync(DbConnection connection, BulkImportRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<int> BulkImportAsync(DbConnection connection, DbTransaction? transaction, BulkImportRequest request, CancellationToken cancellationToken = default)
     {
         Validate.Required(connection, nameof(connection));
         Validate.Required(request, nameof(request));
@@ -85,6 +85,11 @@ public sealed class PostgreSqlProvider : IDbProvider
         if (connection is not NpgsqlConnection npgConnection)
         {
             throw new DatabaseException(ErrorCategory.Configuration, "PostgreSQL bulk import requires an NpgsqlConnection.");
+        }
+
+        if (transaction is not null && transaction is not NpgsqlTransaction)
+        {
+            throw new DatabaseException(ErrorCategory.Configuration, "PostgreSQL bulk import requires an NpgsqlTransaction when a transaction is provided.");
         }
 
         var copyCommand = BuildCopyCommand(request);
