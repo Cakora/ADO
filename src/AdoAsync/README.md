@@ -147,6 +147,64 @@ var result = await executor.QueryTablesAsync(new CommandDefinition
 var table = result.Tables![0];
 ```
 
+## Multi-Result (All Providers)
+`QueryTablesAsync` supports multiple result sets, but the mechanism differs per provider:
+
+### SQL Server (multiple result sets)
+SQL Server can return multiple result sets from a stored procedure (or multiple `SELECT` statements in one batch):
+```csharp
+var result = await executor.QueryTablesAsync(new CommandDefinition
+{
+    CommandText = "dbo.GetCustomerAndOrders",
+    CommandType = CommandType.StoredProcedure,
+    Parameters = new[]
+    {
+        new DbParameter { Name = "@customerId", DataType = DbDataType.Int32, Value = 42 }
+    }
+});
+
+var customerTable = result.Tables![0];
+var ordersTable = result.Tables![1];
+```
+
+### PostgreSQL (refcursor outputs)
+PostgreSQL stored procedures can return multiple refcursors via output parameters:
+```csharp
+var result = await executor.QueryTablesAsync(new CommandDefinition
+{
+    CommandText = "public.get_customer_and_orders",
+    CommandType = CommandType.StoredProcedure,
+    Parameters = new[]
+    {
+        new DbParameter { Name = "customer_id", DataType = DbDataType.Int32, Value = 42, Direction = ParameterDirection.Input },
+        new DbParameter { Name = "customer_cursor", DataType = DbDataType.RefCursor, Direction = ParameterDirection.Output },
+        new DbParameter { Name = "orders_cursor", DataType = DbDataType.RefCursor, Direction = ParameterDirection.Output }
+    }
+});
+
+var customerTable = result.Tables![0];
+var ordersTable = result.Tables![1];
+```
+
+### Oracle (RefCursor outputs)
+Oracle returns multi-result sets via `RefCursor` output parameters:
+```csharp
+var result = await executor.QueryTablesAsync(new CommandDefinition
+{
+    CommandText = "PKG_CUSTOMER.GET_CUSTOMER_AND_ORDERS",
+    CommandType = CommandType.StoredProcedure,
+    Parameters = new[]
+    {
+        new DbParameter { Name = "p_customer_id", DataType = DbDataType.Int32, Value = 42, Direction = ParameterDirection.Input },
+        new DbParameter { Name = "p_customer", DataType = DbDataType.RefCursor, Direction = ParameterDirection.Output },
+        new DbParameter { Name = "p_orders", DataType = DbDataType.RefCursor, Direction = ParameterDirection.Output }
+    }
+});
+
+var customerTable = result.Tables![0];
+var ordersTable = result.Tables![1];
+```
+
 Multi-result stored procedure -> `QueryTablesAsync` returns multiple tables:
 ```csharp
 var result = await executor.QueryTablesAsync(new CommandDefinition
