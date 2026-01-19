@@ -30,6 +30,12 @@ public sealed class TransactionManager : ITransactionManager
     #region Public API
     /// <summary>Begins a transaction on the provided connection.</summary>
     public async ValueTask<TransactionHandle> BeginAsync(DbConnection connection, CancellationToken cancellationToken = default)
+        => await BeginAsync(connection, onDispose: null, cancellationToken).ConfigureAwait(false);
+
+    internal async ValueTask<TransactionHandle> BeginAsync(
+        DbConnection connection,
+        Action? onDispose,
+        CancellationToken cancellationToken = default)
     {
         if (!ReferenceEquals(connection, _connection))
         {
@@ -48,7 +54,7 @@ public sealed class TransactionManager : ITransactionManager
         }
 
         _transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        return new TransactionHandle(this, _transaction);
+        return new TransactionHandle(this, _transaction, onDispose);
     }
 
     /// <summary>Commits the active transaction.</summary>

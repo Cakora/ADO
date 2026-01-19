@@ -20,6 +20,7 @@ internal sealed class LinqToDbTypedBulkImporter : ILinqToDbTypedBulkImporter
 
     public async ValueTask<int> BulkImportAsync<T>(
         DbConnection connection,
+        DbTransaction? transaction,
         IEnumerable<T> items,
         LinqToDbBulkOptions options,
         int commandTimeoutSeconds,
@@ -30,14 +31,16 @@ internal sealed class LinqToDbTypedBulkImporter : ILinqToDbTypedBulkImporter
         Validate.Required(items, nameof(items));
         Validate.Required(options, nameof(options));
 
-        await using var dataConnection = _connectionFactory.Create(connection);
-        var bulkOptions = BulkCopyOptionsMapper.Map(options, tableName, commandTimeoutSeconds);
+        await using var dataConnection = _connectionFactory.Create(connection, transaction);
+        var resolvedTableName = _connectionFactory.NormalizeTableName(tableName);
+        var bulkOptions = BulkCopyOptionsMapper.Map(options, resolvedTableName, commandTimeoutSeconds);
         var result = await dataConnection.BulkCopyAsync(bulkOptions, items, cancellationToken).ConfigureAwait(false);
         return (int)result.RowsCopied;
     }
 
     public async ValueTask<int> BulkImportAsync<T>(
         DbConnection connection,
+        DbTransaction? transaction,
         IAsyncEnumerable<T> items,
         LinqToDbBulkOptions options,
         int commandTimeoutSeconds,
@@ -48,8 +51,9 @@ internal sealed class LinqToDbTypedBulkImporter : ILinqToDbTypedBulkImporter
         Validate.Required(items, nameof(items));
         Validate.Required(options, nameof(options));
 
-        await using var dataConnection = _connectionFactory.Create(connection);
-        var bulkOptions = BulkCopyOptionsMapper.Map(options, tableName, commandTimeoutSeconds);
+        await using var dataConnection = _connectionFactory.Create(connection, transaction);
+        var resolvedTableName = _connectionFactory.NormalizeTableName(tableName);
+        var bulkOptions = BulkCopyOptionsMapper.Map(options, resolvedTableName, commandTimeoutSeconds);
         var result = await dataConnection.BulkCopyAsync(bulkOptions, items, cancellationToken).ConfigureAwait(false);
         return (int)result.RowsCopied;
     }

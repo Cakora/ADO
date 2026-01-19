@@ -10,6 +10,7 @@ internal interface ILinqToDbTypedBulkImporter
 {
     ValueTask<int> BulkImportAsync<T>(
         DbConnection connection,
+        DbTransaction? transaction,
         IEnumerable<T> items,
         LinqToDbBulkOptions options,
         int commandTimeoutSeconds,
@@ -18,6 +19,7 @@ internal interface ILinqToDbTypedBulkImporter
 
     ValueTask<int> BulkImportAsync<T>(
         DbConnection connection,
+        DbTransaction? transaction,
         IAsyncEnumerable<T> items,
         LinqToDbBulkOptions options,
         int commandTimeoutSeconds,

@@ -14,6 +14,7 @@ using AdoAsync.Providers.Oracle;
 using AdoAsync.Providers.PostgreSql;
 using AdoAsync.Providers.SqlServer;
 using AdoAsync.Resilience;
+using AdoAsync.Transactions;
 using AdoAsync.Validation;
 using FluentValidation;
 using Polly;
@@ -33,6 +34,7 @@ public sealed class DbExecutor : IDbExecutor
     private readonly IValidator<DbParameter> _parameterValidator;
     private readonly IValidator<BulkImportRequest> _bulkImportValidator;
     private readonly ILinqToDbTypedBulkImporter _linqToDbBulkImporter;
+    private DbTransaction? _activeTransaction;
     private DbConnection? _connection;
     private bool _disposed;
     #endregion
@@ -270,7 +272,7 @@ public sealed class DbExecutor : IDbExecutor
             {
                 await EnsureConnectionAsync(ct).ConfigureAwait(false);
                 var started = Stopwatch.StartNew();
-                var rows = await _linqToDbBulkImporter.BulkImportAsync(_connection!, items, resolvedOptions, _options.CommandTimeoutSeconds, tableName, ct).ConfigureAwait(false);
+                var rows = await _linqToDbBulkImporter.BulkImportAsync(_connection!, _activeTransaction, items, resolvedOptions, _options.CommandTimeoutSeconds, tableName, ct).ConfigureAwait(false);
                 started.Stop();
                 return new BulkImportResult
                 {
@@ -310,7 +312,7 @@ public sealed class DbExecutor : IDbExecutor
             {
                 await EnsureConnectionAsync(ct).ConfigureAwait(false);
                 var started = Stopwatch.StartNew();
-                var rows = await _linqToDbBulkImporter.BulkImportAsync(_connection!, items, resolvedOptions, _options.CommandTimeoutSeconds, tableName, ct).ConfigureAwait(false);
+                var rows = await _linqToDbBulkImporter.BulkImportAsync(_connection!, _activeTransaction, items, resolvedOptions, _options.CommandTimeoutSeconds, tableName, ct).ConfigureAwait(false);
                 started.Stop();
                 return new BulkImportResult
                 {
@@ -325,6 +327,26 @@ public sealed class DbExecutor : IDbExecutor
             var error = MapError(ex);
             return new BulkImportResult { Success = false, Error = error };
         }
+    }
+
+    /// <summary>Begins an explicit transaction on the shared connection (rollback-on-dispose unless committed).</summary>
+    public async ValueTask<TransactionHandle> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
+
+        if (_activeTransaction is not null)
+        {
+            throw new DatabaseException(ErrorCategory.State, "A transaction is already active.");
+        }
+
+        var transactionManager = new TransactionManager(_connection!);
+        var handle = await transactionManager
+            .BeginAsync(_connection!, onDispose: () => _activeTransaction = null, cancellationToken)
+            .ConfigureAwait(false);
+
+        _activeTransaction = handle.Transaction;
+        return handle;
     }
 
     /// <summary>Dispose the shared connection if this executor created it.</summary>
@@ -364,6 +386,10 @@ public sealed class DbExecutor : IDbExecutor
     {
         await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
         var dbCommand = _provider.CreateCommand(_connection!, definition);
+        if (_activeTransaction is not null)
+        {
+            dbCommand.Transaction = _activeTransaction;
+        }
         if (definition.Parameters is { } parameters)
         {
             _provider.ApplyParameters(dbCommand, parameters);
@@ -419,18 +445,27 @@ public sealed class DbExecutor : IDbExecutor
             {
                 await EnsureConnectionAsync(ct).ConfigureAwait(false);
                 // Refcursor fetches require a transaction scope in PostgreSQL.
-                await using var transaction = await _connection!.BeginTransactionAsync(ct).ConfigureAwait(false);
+                // If the caller already started a transaction, reuse it instead of creating a nested transaction.
+                await using var transaction = _activeTransaction is null
+                    ? await _connection!.BeginTransactionAsync(ct).ConfigureAwait(false)
+                    : null;
                 await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
-                dbCommand.Transaction = transaction;
+                if (transaction is not null)
+                {
+                    dbCommand.Transaction = transaction;
+                }
                 try
                 {
                     await dbCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
                     var tables = await PostgreSqlProvider
-                        .ReadRefCursorResultsAsync(dbCommand, _connection!, transaction, ct)
+                        .ReadRefCursorResultsAsync(dbCommand, _connection!, transaction ?? _activeTransaction!, ct)
                         .ConfigureAwait(false);
 
-                    await transaction.CommitAsync(ct).ConfigureAwait(false);
+                    if (transaction is not null)
+                    {
+                        await transaction.CommitAsync(ct).ConfigureAwait(false);
+                    }
 
                     return new DbResult
                     {
@@ -441,7 +476,10 @@ public sealed class DbExecutor : IDbExecutor
                 }
                 catch
                 {
-                    await transaction.RollbackAsync(ct).ConfigureAwait(false);
+                    if (transaction is not null)
+                    {
+                        await transaction.RollbackAsync(ct).ConfigureAwait(false);
+                    }
                     throw;
                 }
             }, cancellationToken).ConfigureAwait(false);

@@ -4,6 +4,7 @@ using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using AdoAsync.BulkCopy.LinqToDb.Common;
+using AdoAsync.Transactions;
 
 namespace AdoAsync.Abstractions;
 
@@ -35,5 +36,8 @@ public interface IDbExecutor : IAsyncDisposable
 
     /// <summary>Performs a typed async bulk import via linq2db (requires DbOptions.LinqToDb.Enable).</summary>
     ValueTask<BulkImportResult> BulkImportAsync<T>(IAsyncEnumerable<T> items, string? tableName = null, LinqToDbBulkOptions? bulkOptions = null, CancellationToken cancellationToken = default) where T : class;
+
+    /// <summary>Begins an explicit transaction on the executor connection (rollback-on-dispose unless committed).</summary>
+    ValueTask<TransactionHandle> BeginTransactionAsync(CancellationToken cancellationToken = default);
     #endregion
 }

@@ -13,13 +13,15 @@ public sealed class TransactionHandle : IAsyncDisposable
     #region Fields
     private readonly TransactionManager _manager;
     private readonly DbTransaction _transaction;
+    private readonly Action? _onDispose;
     #endregion
 
     #region Constructors
-    internal TransactionHandle(TransactionManager manager, DbTransaction transaction)
+    internal TransactionHandle(TransactionManager manager, DbTransaction transaction, Action? onDispose = null)
     {
         _manager = manager;
         _transaction = transaction;
+        _onDispose = onDispose;
     }
     #endregion
 
@@ -37,7 +39,16 @@ public sealed class TransactionHandle : IAsyncDisposable
         => _manager.RollbackAsync(cancellationToken);
 
     /// <summary>Disposes the transaction, rolling back if not committed.</summary>
-    public ValueTask DisposeAsync()
-        => _manager.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await _manager.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _onDispose?.Invoke();
+        }
+    }
     #endregion
 }
