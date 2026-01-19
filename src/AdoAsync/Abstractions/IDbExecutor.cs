@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
+using AdoAsync.BulkCopy.LinqToDb.Common;
 
 namespace AdoAsync.Abstractions;
 
@@ -28,5 +29,11 @@ public interface IDbExecutor : IAsyncDisposable
 
     /// <summary>Performs a bulk import into a destination table.</summary>
     ValueTask<BulkImportResult> BulkImportAsync(BulkImportRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Performs a typed bulk import via linq2db (requires DbOptions.LinqToDb.Enable).</summary>
+    ValueTask<BulkImportResult> BulkImportAsync<T>(IEnumerable<T> items, string? tableName = null, LinqToDbBulkOptions? bulkOptions = null, CancellationToken cancellationToken = default) where T : class;
+
+    /// <summary>Performs a typed async bulk import via linq2db (requires DbOptions.LinqToDb.Enable).</summary>
+    ValueTask<BulkImportResult> BulkImportAsync<T>(IAsyncEnumerable<T> items, string? tableName = null, LinqToDbBulkOptions? bulkOptions = null, CancellationToken cancellationToken = default) where T : class;
     #endregion
 }

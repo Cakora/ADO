@@ -8,6 +8,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AdoAsync.Abstractions;
+using AdoAsync.BulkCopy.LinqToDb.Common;
+using AdoAsync.BulkCopy.LinqToDb.Typed;
 using AdoAsync.Providers.Oracle;
 using AdoAsync.Providers.PostgreSql;
 using AdoAsync.Providers.SqlServer;
@@ -30,6 +32,7 @@ public sealed class DbExecutor : IDbExecutor
     private readonly IValidator<CommandDefinition> _commandValidator;
     private readonly IValidator<DbParameter> _parameterValidator;
     private readonly IValidator<BulkImportRequest> _bulkImportValidator;
+    private readonly ILinqToDbTypedBulkImporter _linqToDbBulkImporter;
     private DbConnection? _connection;
     private bool _disposed;
     #endregion
@@ -42,7 +45,8 @@ public sealed class DbExecutor : IDbExecutor
         IAsyncPolicy retryPolicy,
         IValidator<CommandDefinition> commandValidator,
         IValidator<DbParameter> parameterValidator,
-        IValidator<BulkImportRequest> bulkImportValidator)
+        IValidator<BulkImportRequest> bulkImportValidator,
+        ILinqToDbTypedBulkImporter linqToDbBulkImporter)
     {
         _options = options;
         _provider = provider;
@@ -50,6 +54,7 @@ public sealed class DbExecutor : IDbExecutor
         _commandValidator = commandValidator;
         _parameterValidator = parameterValidator;
         _bulkImportValidator = bulkImportValidator;
+        _linqToDbBulkImporter = linqToDbBulkImporter;
     }
     #endregion
 
@@ -64,6 +69,8 @@ public sealed class DbExecutor : IDbExecutor
         var commandValidator = new CommandDefinitionValidator();
         var parameterValidator = new DbParameterValidator();
         var bulkImportValidator = new BulkImportRequestValidator();
+        var linqToDbConnectionFactory = new LinqToDbConnectionFactory(options.DatabaseType);
+        var linqToDbBulkImporter = new LinqToDbTypedBulkImporter(linqToDbConnectionFactory);
 
         var retryPolicy = RetryPolicyFactory.Create(
             options,
@@ -76,7 +83,7 @@ public sealed class DbExecutor : IDbExecutor
             throw new DatabaseException(ErrorCategory.Configuration, $"Invalid DbOptions: {validationError.MessageKey}");
         }
 
-        return new DbExecutor(options, provider, retryPolicy, commandValidator, parameterValidator, bulkImportValidator);
+        return new DbExecutor(options, provider, retryPolicy, commandValidator, parameterValidator, bulkImportValidator, linqToDbBulkImporter);
     }
     #endregion
 
@@ -224,6 +231,86 @@ public sealed class DbExecutor : IDbExecutor
                 await EnsureConnectionAsync(ct).ConfigureAwait(false);
                 var started = Stopwatch.StartNew();
                 var rows = await _provider.BulkImportAsync(_connection!, request, ct).ConfigureAwait(false);
+                started.Stop();
+                return new BulkImportResult
+                {
+                    Success = true,
+                    RowsInserted = rows,
+                    Duration = started.Elapsed
+                };
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            var error = MapError(ex);
+            return new BulkImportResult { Success = false, Error = error };
+        }
+    }
+
+    /// <summary>Bulk import typed rows using linq2db. Requires linq2db bulk copy to be enabled.</summary>
+    public async ValueTask<BulkImportResult> BulkImportAsync<T>(
+        IEnumerable<T> items,
+        string? tableName = null,
+        LinqToDbBulkOptions? bulkOptions = null,
+        CancellationToken cancellationToken = default) where T : class
+    {
+        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        Validate.Required(items, nameof(items));
+
+        var resolvedOptions = ResolveLinqToDbOptions(bulkOptions);
+        if (!resolvedOptions.Enable)
+        {
+            var error = DbErrorMapper.Map(new DatabaseException(ErrorCategory.Configuration, "LinqToDB bulk copy is disabled. Enable DbOptions.LinqToDb.Enable to use typed bulk imports."));
+            return new BulkImportResult { Success = false, Error = error };
+        }
+
+        try
+        {
+            return await _retryPolicy.ExecuteAsync(async ct =>
+            {
+                await EnsureConnectionAsync(ct).ConfigureAwait(false);
+                var started = Stopwatch.StartNew();
+                var rows = await _linqToDbBulkImporter.BulkImportAsync(_connection!, items, resolvedOptions, _options.CommandTimeoutSeconds, tableName, ct).ConfigureAwait(false);
+                started.Stop();
+                return new BulkImportResult
+                {
+                    Success = true,
+                    RowsInserted = rows,
+                    Duration = started.Elapsed
+                };
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            var error = MapError(ex);
+            return new BulkImportResult { Success = false, Error = error };
+        }
+    }
+
+    /// <summary>Bulk import async-typed rows using linq2db. Requires linq2db bulk copy to be enabled.</summary>
+    public async ValueTask<BulkImportResult> BulkImportAsync<T>(
+        IAsyncEnumerable<T> items,
+        string? tableName = null,
+        LinqToDbBulkOptions? bulkOptions = null,
+        CancellationToken cancellationToken = default) where T : class
+    {
+        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        Validate.Required(items, nameof(items));
+
+        var resolvedOptions = ResolveLinqToDbOptions(bulkOptions);
+        if (!resolvedOptions.Enable)
+        {
+            var error = DbErrorMapper.Map(new DatabaseException(ErrorCategory.Configuration, "LinqToDB bulk copy is disabled. Enable DbOptions.LinqToDb.Enable to use typed bulk imports."));
+            return new BulkImportResult { Success = false, Error = error };
+        }
+
+        try
+        {
+            return await _retryPolicy.ExecuteAsync(async ct =>
+            {
+                await EnsureConnectionAsync(ct).ConfigureAwait(false);
+                var started = Stopwatch.StartNew();
+                var rows = await _linqToDbBulkImporter.BulkImportAsync(_connection!, items, resolvedOptions, _options.CommandTimeoutSeconds, tableName, ct).ConfigureAwait(false);
                 started.Stop();
                 return new BulkImportResult
                 {
@@ -487,6 +574,34 @@ public sealed class DbExecutor : IDbExecutor
 
         var error = MapError(exception);
         return new DbClientException(error, exception);
+    }
+
+    private LinqToDbBulkOptions ResolveLinqToDbOptions(LinqToDbBulkOptions? overrides)
+    {
+        var defaults = _options.LinqToDb ?? new LinqToDbBulkOptions();
+        if (overrides is null)
+        {
+            return defaults;
+        }
+
+        return defaults with
+        {
+            Enable = overrides.Enable || defaults.Enable,
+            BulkCopyType = overrides.BulkCopyType,
+            BulkCopyTimeoutSeconds = overrides.BulkCopyTimeoutSeconds ?? defaults.BulkCopyTimeoutSeconds,
+            MaxBatchSize = overrides.MaxBatchSize ?? defaults.MaxBatchSize,
+            NotifyAfter = overrides.NotifyAfter ?? defaults.NotifyAfter,
+            KeepIdentity = overrides.KeepIdentity ?? defaults.KeepIdentity,
+            CheckConstraints = overrides.CheckConstraints ?? defaults.CheckConstraints,
+            KeepNulls = overrides.KeepNulls ?? defaults.KeepNulls,
+            FireTriggers = overrides.FireTriggers ?? defaults.FireTriggers,
+            TableLock = overrides.TableLock ?? defaults.TableLock,
+            UseInternalTransaction = overrides.UseInternalTransaction ?? defaults.UseInternalTransaction,
+            UseParameters = overrides.UseParameters ?? defaults.UseParameters,
+            MaxParametersForBatch = overrides.MaxParametersForBatch ?? defaults.MaxParametersForBatch,
+            MaxDegreeOfParallelism = overrides.MaxDegreeOfParallelism ?? defaults.MaxDegreeOfParallelism,
+            OnRowsCopied = overrides.OnRowsCopied ?? defaults.OnRowsCopied
+        };
     }
 
     private DbError MapError(Exception exception)

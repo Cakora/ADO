@@ -1,4 +1,5 @@
 using System.Data.Common;
+using AdoAsync.BulkCopy.LinqToDb.Common;
 
 namespace AdoAsync;
 
@@ -40,6 +41,9 @@ public sealed record DbOptions
     /// </summary>
     // Useful for providers that expose pooling or advanced connection creation APIs.
     public DbDataSource? DataSource { get; init; }
+
+    /// <summary>Optional linq2db bulk copy settings (disabled by default).</summary>
+    public LinqToDbBulkOptions LinqToDb { get; init; } = new();
     #endregion
 }
 
