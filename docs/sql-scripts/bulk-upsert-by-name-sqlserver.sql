@@ -75,29 +75,27 @@ BEGIN
     BEGIN
         DECLARE @EndRow INT = @StartRow + 499;
 
-        ;WITH Batch AS
-        (
-            SELECT [Name]
-            FROM @DistinctNames
-            WHERE RowNum BETWEEN @StartRow AND @EndRow
-        )
         -- Insert missing names (no MERGE).
         INSERT INTO dbo.ItemCatalog([Name], IsImported)
         SELECT b.[Name], 1
-        FROM Batch b
-        WHERE NOT EXISTS (SELECT 1 FROM dbo.ItemCatalog t WHERE t.[Name] = b.[Name]);
-
-        ;WITH Batch AS
+        FROM
         (
             SELECT [Name]
             FROM @DistinctNames
             WHERE RowNum BETWEEN @StartRow AND @EndRow
-        )
+        ) b
+        WHERE NOT EXISTS (SELECT 1 FROM dbo.ItemCatalog t WHERE t.[Name] = b.[Name]);
+
         -- Update existing matches to mark imported (inserted rows already have IsImported = 1).
         UPDATE t
             SET t.IsImported = 1
         FROM dbo.ItemCatalog t
-        INNER JOIN Batch b ON b.[Name] = t.[Name]
+        INNER JOIN
+        (
+            SELECT [Name]
+            FROM @DistinctNames
+            WHERE RowNum BETWEEN @StartRow AND @EndRow
+        ) b ON b.[Name] = t.[Name]
         INNER JOIN @Existing e ON e.[Name] = t.[Name];
 
         SET @StartRow = @StartRow + 500;

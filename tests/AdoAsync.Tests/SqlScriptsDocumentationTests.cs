@@ -35,6 +35,8 @@ public class SqlScriptsDocumentationTests
 
         sqlText.Should().Contain("500", "script should batch with size 500");
         oraText.Should().Contain("500", "script should batch with size 500");
+
+        sqlText.Should().NotContain(";WITH Batch AS", "script should avoid CTE batching pattern");
     }
 
     private static string FindRepoRoot(string startDirectory)
