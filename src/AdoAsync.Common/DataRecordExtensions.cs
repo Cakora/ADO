@@ -18,12 +18,23 @@ public static class DataRecordExtensions
         }
 
         var value = record.GetValue(ordinal);
+        if (value is null)
+        {
+            return default;
+        }
+
         if (value is T typed)
         {
             return typed;
         }
 
-        return (T)CommonValueConverter.ConvertValue(value, typeof(T));
+        var converted = CommonValueConverter.ConvertValue(value, typeof(T));
+        if (converted is null)
+        {
+            return default;
+        }
+
+        return (T)converted;
     }
 
     public static T? Get<T>(this IDataRecord record, string name)

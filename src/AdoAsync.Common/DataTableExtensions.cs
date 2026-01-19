@@ -43,7 +43,7 @@ public static class DataTableExtensions
             for (var i = 0; i < table.Columns.Count; i++)
             {
                 var value = row[i];
-                if (value is DBNull)
+                if (value is null || value is DBNull)
                 {
                     newRow[i] = DBNull.Value;
                     continue;

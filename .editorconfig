@@ -1,0 +1,6 @@
+# top-most EditorConfig file
+root = true
+
+[*.cs]
+# Disable Roslynator exception constructor requirement to avoid obsolete formatter patterns
+dotnet_diagnostic.RCS1194.severity = none

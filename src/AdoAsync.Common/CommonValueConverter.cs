@@ -5,7 +5,7 @@ namespace AdoAsync.Common;
 
 internal static class CommonValueConverter
 {
-    internal static object ConvertValue(object value, Type targetType)
+    internal static object? ConvertValue(object? value, Type targetType)
     {
         if (targetType is null)
         {
@@ -19,7 +19,7 @@ internal static class CommonValueConverter
         {
             if (!resolvedTargetType.IsValueType || nullableUnderlying is not null)
             {
-                return null!;
+                return null;
             }
 
             throw new InvalidCastException($"Cannot convert null to non-nullable type '{resolvedTargetType}'.");
