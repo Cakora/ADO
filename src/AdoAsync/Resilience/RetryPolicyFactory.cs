@@ -6,6 +6,19 @@ namespace AdoAsync.Resilience;
 
 /// <summary>
 /// Builds Polly retry policies based on DbOptions. No hidden retries.
+///
+/// Retries are attempted only when:
+/// - <see cref="DbOptions.EnableRetry"/> is true, AND
+/// - the caller is not inside an explicit user transaction, AND
+/// - the provider exception mapper marks the error as transient (<c>DbError.IsTransient == true</c>).
+///
+/// Transient errors currently include (provider-specific):
+/// - Timeouts (e.g., SQL Server timeout, PostgreSQL query canceled, Oracle ORA-01013/ORA-12170)
+/// - Deadlocks/serialization failures
+/// - Connection failures
+/// - Some resource throttling cases (SQL Server 10928/10929; PostgreSQL lock not available)
+///
+/// Non-transient errors (e.g., missing tables/procedures, syntax errors, validation errors) are not retried.
 /// </summary>
 public static class RetryPolicyFactory
 {

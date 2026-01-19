@@ -26,7 +26,11 @@ public sealed record DbOptions
     public bool EnableValidation { get; init; } = true;
 
 
-    /// <summary>Enables Polly-backed retries.</summary>
+    /// <summary>
+    /// Enables Polly-backed retries for transient failures only (timeouts/deadlocks/connection drops).
+    /// Non-transient failures (e.g., missing tables/procedures, syntax errors) are not retried.
+    /// Retries are also skipped while a user transaction is active.
+    /// </summary>
     // Keep retries opt-in to avoid surprising at-least-once semantics.
     public bool EnableRetry { get; init; } = false;
 
