@@ -3,17 +3,13 @@ using System;
 namespace AdoAsync;
 
 /// <summary>
-/// Unified exception that wraps provider errors into a stable, cross-provider shape.
+/// Legacy name for <see cref="DbCallerException"/>. Prefer <see cref="DbCallerException"/> in new code.
 /// </summary>
-public sealed class DbClientException : Exception
+public sealed class DbClientException : DbCallerException
 {
-    /// <summary>Structured error payload for client decisions.</summary>
-    public DbError Error { get; }
-
-    /// <summary>Creates a new client exception from a structured error.</summary>
+    /// <summary>Creates a new exception from a structured error.</summary>
     public DbClientException(DbError error, Exception? innerException = null)
-        : base(error.MessageKey, innerException)
+        : base(error, innerException)
     {
-        Error = error ?? throw new ArgumentNullException(nameof(error));
     }
 }

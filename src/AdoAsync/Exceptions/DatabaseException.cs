@@ -5,6 +5,10 @@ namespace AdoAsync;
 /// <summary>
 /// Library-specific exception to avoid leaking framework exception types.
 /// </summary>
+/// <remarks>
+/// This exception is primarily used internally within AdoAsync and gets mapped to <see cref="DbError"/>.
+/// Most callers should catch <see cref="DbCallerException"/> instead.
+/// </remarks>
 public sealed class DatabaseException : Exception
 {
     /// <summary>High-level reason for the failure.</summary>

@@ -97,7 +97,7 @@ public sealed class DbExecutor : IDbExecutor
         var validationError = ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
-            throw new DbClientException(validationError);
+            throw new DbCallerException(validationError);
         }
 
         try
@@ -121,7 +121,7 @@ public sealed class DbExecutor : IDbExecutor
         var validationError = ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
-            throw new DbClientException(validationError);
+            throw new DbCallerException(validationError);
         }
 
         try
@@ -157,7 +157,7 @@ public sealed class DbExecutor : IDbExecutor
         var validationError = ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
-            throw new DbClientException(validationError);
+            throw new DbCallerException(validationError);
         }
 
         // Keep explicit mapping here; automatic mapping can wrap this method later without touching the execution path.
@@ -623,15 +623,15 @@ public sealed class DbExecutor : IDbExecutor
         return _retryPolicy.ExecuteAsync(action, cancellationToken);
     }
 
-    private DbClientException WrapException(Exception exception)
+    private DbCallerException WrapException(Exception exception)
     {
-        if (exception is DbClientException clientException)
+        if (exception is DbCallerException callerException)
         {
-            return clientException;
+            return callerException;
         }
 
         var error = MapError(exception);
-        return new DbClientException(error, exception);
+        return new DbCallerException(error, exception);
     }
 
     private LinqToDbBulkOptions ResolveLinqToDbOptions(LinqToDbBulkOptions? overrides)
@@ -664,9 +664,9 @@ public sealed class DbExecutor : IDbExecutor
 
     private DbError MapError(Exception exception)
     {
-        if (exception is DbClientException clientException)
+        if (exception is DbCallerException callerException)
         {
-            return clientException.Error;
+            return callerException.Error;
         }
 
         return MapProviderError(_options.DatabaseType, exception);

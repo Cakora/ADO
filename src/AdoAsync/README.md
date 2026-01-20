@@ -11,6 +11,11 @@ Async-first ADO.NET helper that keeps provider logic contained for SQL Server, P
 - Diagnostics off by default; returned via result contracts instead of logging.
 - Explicit bulk import with column mapping (provider-owned implementations).
 
+## Errors and Exceptions
+- Prefer `DbResult.Error` where available (no thrown provider exceptions).
+- When exceptions are thrown, catch `DbCallerException` and read `DbCallerException.Error`.
+- `DbClientException` exists only as a legacy name; prefer `DbCallerException`.
+
 ## Quick Start
 ```csharp
 var options = new DbOptions

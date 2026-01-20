@@ -16,7 +16,7 @@ public static class AdoAsyncServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddAdoAsyncFactory(this IServiceCollection services)
     {
-        Validate.Required(services, nameof(services));
+        Validate.Required(services, nameof(services)); // Guard: services not null.
         services.TryAddSingleton<IDbExecutorFactory, DbExecutorFactory>();
         return services;
     }
@@ -80,20 +80,5 @@ public static class AdoAsyncServiceCollectionExtensions
         where TName : struct, Enum
     {
         return services.AddAdoAsyncExecutor(name.ToString());
-    }
-}
-
-/// <summary>Named database options for multi-database registration.</summary>
-public sealed record NamedDbOptions(string Name, DbOptions Options);
-
-/// <summary>Convenience extensions for enum-keyed multi-database setups.</summary>
-public static class DbExecutorFactoryExtensions
-{
-    /// <summary>Creates an executor for the configured enum database key.</summary>
-    public static IDbExecutor Create<TName>(this IDbExecutorFactory factory, TName name, bool isInUserTransaction = false)
-        where TName : struct, Enum
-    {
-        Validate.Required(factory, nameof(factory));
-        return factory.Create(name, isInUserTransaction);
     }
 }
