@@ -11,6 +11,9 @@ public static class DataTableExtensions
         this DataTable table,
         IReadOnlyDictionary<string, Type> columnTypes)
     {
+        // Clones then converts the table; use only when you need normalized names/types (can be expensive).
+        // Typical use: take a loosely-typed DataTable (e.g., external source) and align it to expected types/names:
+        // var normalized = table.Normalize(new Dictionary<string, Type> { ["Id"] = typeof(int), ["Name"] = typeof(string) });
         if (table is null)
         {
             throw new ArgumentNullException(nameof(table));

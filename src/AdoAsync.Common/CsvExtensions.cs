@@ -54,6 +54,7 @@ public static class CsvExtensions
 
                 var column = table.Columns[i].ColumnName;
                 var name = ResolveName(columnMap, column);
+                // Write header column name (mapped if provided).
                 AppendEscaped(builder, name);
             }
 
@@ -123,6 +124,7 @@ public static class CsvExtensions
                 }
 
                 var value = resolvedColumns[i].Selector(item);
+                // Write each projected column value.
                 AppendEscaped(builder, value);
             }
 
@@ -175,6 +177,7 @@ public static class CsvExtensions
             return;
         }
 
+        // Escape quotes per CSV by doubling them.
         builder.Append('"');
         foreach (var ch in text)
         {

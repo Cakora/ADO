@@ -12,6 +12,7 @@ public static class DataRecordExtensions
             throw new ArgumentNullException(nameof(record));
         }
 
+        // Return default for DBNull/null to avoid conversions on missing values.
         if (record.IsDBNull(ordinal))
         {
             return default;
@@ -28,6 +29,7 @@ public static class DataRecordExtensions
             return typed;
         }
 
+        // Normalize provider-specific scalars to the requested type.
         var converted = CommonValueConverter.ConvertValue(value, typeof(T));
         if (converted is null)
         {

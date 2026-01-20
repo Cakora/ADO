@@ -630,8 +630,9 @@ public sealed class DbExecutor : IDbExecutor
             return callerException;
         }
 
-        var error = MapError(exception);
-        return new DbCallerException(error, exception);
+        return _options.WrapProviderExceptions
+            ? new DbCallerException(MapError(exception), exception)
+            : throw exception;
     }
 
     private LinqToDbBulkOptions ResolveLinqToDbOptions(LinqToDbBulkOptions? overrides)

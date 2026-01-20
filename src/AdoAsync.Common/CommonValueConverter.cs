@@ -27,6 +27,7 @@ internal static class CommonValueConverter
 
         if (resolvedTargetType == typeof(Guid))
         {
+            // Handle Guid as native, byte[16], or string.
             if (value is Guid guid)
             {
                 return guid;
@@ -43,6 +44,7 @@ internal static class CommonValueConverter
 
         if (resolvedTargetType == typeof(DateTimeOffset))
         {
+            // Normalize DateTime -> DateTimeOffset while preserving kind.
             return value switch
             {
                 DateTimeOffset offset => offset,
@@ -64,6 +66,7 @@ internal static class CommonValueConverter
 
         if (resolvedTargetType == typeof(TimeSpan))
         {
+            // Accept TimeSpan or DateTime (using its time component).
             return value switch
             {
                 TimeSpan span => span,
@@ -74,6 +77,7 @@ internal static class CommonValueConverter
 
         if (resolvedTargetType.IsEnum)
         {
+            // Parse enums from string or numeric underlying value.
             if (value is string enumText)
             {
                 return Enum.Parse(resolvedTargetType, enumText, ignoreCase: true);

@@ -25,6 +25,12 @@ public sealed record DbOptions
     /// <summary>Enables FluentValidation checks.</summary>
     public bool EnableValidation { get; init; } = true;
 
+    /// <summary>
+    /// When true (default), AdoAsync wraps provider/framework exceptions in <see cref="DbCallerException"/> with a structured <see cref="DbError"/>.
+    /// When false, provider exceptions flow through unchanged (no wrapping).
+    /// </summary>
+    public bool WrapProviderExceptions { get; init; } = true;
+
 
     /// <summary>
     /// Enables Polly-backed retries for transient failures only (timeouts/deadlocks/connection drops).
