@@ -15,6 +15,7 @@
     <PackageReference Include="linq2db.Oracle" Version="6.1.0" />
     <PackageReference Include="linq2db.PostgreSQL" Version="6.1.0" />
     <PackageReference Include="linq2db.SqlServer" Version="6.1.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
     <PackageReference Include="Npgsql" Version="10.0.1" />
     <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.26.0" />
