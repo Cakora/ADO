@@ -1,6 +1,7 @@
 using System;
 using AdoAsync.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace AdoAsync.DependencyInjection;
 
@@ -24,7 +25,7 @@ public static class AdoAsyncServiceCollectionExtensions
         }
 
         services.AddSingleton(new NamedDbOptions(name.Trim(), options));
-        services.AddSingleton<IDbExecutorFactory, DbExecutorFactory>();
+        services.TryAddSingleton<IDbExecutorFactory, DbExecutorFactory>();
         return services;
     }
 
@@ -69,5 +70,20 @@ public static class AdoAsyncServiceCollectionExtensions
         where TName : struct, Enum
     {
         return services.AddAdoAsyncExecutor(name.ToString());
+    }
+}
+
+/// <summary>Named database options for multi-database registration.</summary>
+public sealed record NamedDbOptions(string Name, DbOptions Options);
+
+/// <summary>Convenience extensions for enum-keyed multi-database setups.</summary>
+public static class DbExecutorFactoryExtensions
+{
+    /// <summary>Creates an executor for the configured enum database key.</summary>
+    public static IDbExecutor Create<TName>(this IDbExecutorFactory factory, TName name, bool isInUserTransaction = false)
+        where TName : struct, Enum
+    {
+        Validate.Required(factory, nameof(factory));
+        return factory.Create(name.ToString(), isInUserTransaction);
     }
 }

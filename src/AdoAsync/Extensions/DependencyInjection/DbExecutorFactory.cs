@@ -14,17 +14,18 @@ internal sealed class DbExecutorFactory : IDbExecutorFactory
         var map = new Dictionary<string, DbOptions>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in namedOptions)
         {
-            if (entry is null)
-            {
-                continue;
-            }
-
             if (string.IsNullOrWhiteSpace(entry.Name))
             {
                 throw new ArgumentException("Named database entry requires a non-empty Name.", nameof(namedOptions));
             }
 
-            map.Add(entry.Name.Trim(), entry.Options);
+            var key = entry.Name.Trim();
+            if (map.ContainsKey(key))
+            {
+                throw new ArgumentException($"Duplicate database name '{key}'. Names are case-insensitive.", nameof(namedOptions));
+            }
+
+            map.Add(key, entry.Options);
         }
 
         _optionsByName = map;
@@ -50,4 +51,3 @@ internal sealed class DbExecutorFactory : IDbExecutorFactory
         return DbExecutor.Create(options, isInUserTransaction);
     }
 }
-
