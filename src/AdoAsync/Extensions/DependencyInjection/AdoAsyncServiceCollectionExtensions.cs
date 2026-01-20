@@ -12,6 +12,16 @@ public static class AdoAsyncServiceCollectionExtensions
     public const string DefaultName = "Default";
 
     /// <summary>
+    /// Registers <see cref="IDbExecutorFactory"/> only. Use this when <see cref="DbOptions"/> varies per call.
+    /// </summary>
+    public static IServiceCollection AddAdoAsyncFactory(this IServiceCollection services)
+    {
+        Validate.Required(services, nameof(services));
+        services.TryAddSingleton<IDbExecutorFactory, DbExecutorFactory>();
+        return services;
+    }
+
+    /// <summary>
     /// Registers a named database options entry and the shared <see cref="IDbExecutorFactory"/>.
     /// </summary>
     public static IServiceCollection AddAdoAsync(this IServiceCollection services, string name, DbOptions options)
@@ -25,7 +35,7 @@ public static class AdoAsyncServiceCollectionExtensions
         }
 
         services.AddSingleton(new NamedDbOptions(name.Trim(), options));
-        services.TryAddSingleton<IDbExecutorFactory, DbExecutorFactory>();
+        services.AddAdoAsyncFactory();
         return services;
     }
 

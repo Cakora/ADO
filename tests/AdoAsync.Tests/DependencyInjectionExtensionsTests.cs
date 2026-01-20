@@ -32,6 +32,21 @@ public sealed class DependencyInjectionExtensionsTests
     }
 
     [Fact]
+    public async Task AddAdoAsyncFactory_RegistersFactory_AndCreatesExecutorFromOptions()
+    {
+        var services = new ServiceCollection();
+        services.AddAdoAsyncFactory();
+
+        await using var provider = services.BuildServiceProvider();
+        var factory = provider.GetRequiredService<IDbExecutorFactory>();
+
+        var options = CreateValidOptions(DatabaseType.SqlServer);
+        await using var executor = factory.Create(options);
+
+        executor.Should().NotBeNull();
+    }
+
+    [Fact]
     public async Task AddAdoAsync_Default_RegistersScopedExecutor()
     {
         var services = new ServiceCollection();
