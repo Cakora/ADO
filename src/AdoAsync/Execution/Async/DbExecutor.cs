@@ -670,43 +670,67 @@ public sealed class DbExecutor : IDbExecutor
             return null;
         }
 
-        Dictionary<string, DbParameter>? parameterLookup = null;
-        if (parameters is { Count: > 0 })
-        {
-            parameterLookup = new Dictionary<string, DbParameter>(StringComparer.OrdinalIgnoreCase);
-            foreach (var parameter in parameters)
-            {
-                var name = TrimParameterPrefix(parameter.Name);
-                parameterLookup[name] = parameter;
-            }
-        }
-
+        var parameterLookup = BuildParameterLookup(parameters);
         Dictionary<string, object?>? outputValues = null;
+
         foreach (System.Data.Common.DbParameter parameter in command.Parameters)
         {
-            if (parameter.Direction == ParameterDirection.Input)
+            if (!TryGetOutputValue(parameter, parameterLookup, out var name, out var value))
             {
                 continue;
             }
 
             outputValues ??= new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-            var name = TrimParameterPrefix(parameter.ParameterName);
-            if (parameterLookup is not null && parameterLookup.TryGetValue(name, out var definition))
-            {
-                if (definition.DataType == DbDataType.RefCursor)
-                {
-                    continue;
-                }
-
-                outputValues[name] = OutputParameterConverter.Normalize(parameter.Value, definition.DataType);
-            }
-            else
-            {
-                outputValues[name] = parameter.Value is DBNull ? null : parameter.Value;
-            }
+            outputValues[name] = value;
         }
 
         return outputValues;
+    }
+
+    private static Dictionary<string, DbParameter>? BuildParameterLookup(IReadOnlyList<DbParameter>? parameters)
+    {
+        if (parameters is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var lookup = new Dictionary<string, DbParameter>(StringComparer.OrdinalIgnoreCase);
+        foreach (var parameter in parameters)
+        {
+            var name = TrimParameterPrefix(parameter.Name);
+            lookup[name] = parameter;
+        }
+
+        return lookup;
+    }
+
+    private static bool TryGetOutputValue(
+        System.Data.Common.DbParameter parameter,
+        IReadOnlyDictionary<string, DbParameter>? parameterLookup,
+        out string name,
+        out object? value)
+    {
+        name = TrimParameterPrefix(parameter.ParameterName);
+        value = null;
+
+        if (parameter.Direction == ParameterDirection.Input)
+        {
+            return false;
+        }
+
+        if (parameterLookup is not null && parameterLookup.TryGetValue(name, out var definition))
+        {
+            if (definition.DataType == DbDataType.RefCursor)
+            {
+                return false;
+            }
+
+            value = OutputParameterConverter.Normalize(parameter.Value, definition.DataType);
+            return true;
+        }
+
+        value = parameter.Value is DBNull ? null : parameter.Value;
+        return true;
     }
 
     private static string TrimParameterPrefix(string name)
