@@ -670,7 +670,10 @@ public sealed class DbExecutor : IDbExecutor
             return null;
         }
 
-        var parameterLookup = BuildParameterLookup(parameters);
+        var parameterLookup = parameters is null || parameters.Count == 0
+            ? null
+            : BuildParameterLookup(parameters);
+
         Dictionary<string, TValue?>? outputValues = null;
 
         foreach (System.Data.Common.DbParameter parameter in command.Parameters)
@@ -681,23 +684,30 @@ public sealed class DbExecutor : IDbExecutor
             }
 
             var name = TrimParameterPrefix(parameter.ParameterName);
-            if (parameterLookup is not null && parameterLookup.TryGetValue(name, out var definition))
-            {
-                if (definition.DataType == DbDataType.RefCursor)
-                {
-                    continue;
-                }
+            DbParameter? definition = null;
+            var hasDefinition = parameterLookup is not null && parameterLookup.TryGetValue(name, out definition);
 
-                outputValues ??= new Dictionary<string, TValue?>(StringComparer.OrdinalIgnoreCase);
-                outputValues[name] = (TValue?)OutputParameterConverter.Normalize(parameter.Value, definition.DataType);
+            if (hasDefinition && definition!.DataType == DbDataType.RefCursor)
+            {
                 continue;
             }
 
             outputValues ??= new Dictionary<string, TValue?>(StringComparer.OrdinalIgnoreCase);
-            outputValues[name] = parameter.Value is DBNull ? default : (TValue?)parameter.Value;
+            var dataType = hasDefinition ? definition!.DataType : (DbDataType?)null;
+            outputValues[name] = NormalizeOutputValue<TValue>(parameter, dataType);
         }
 
         return outputValues;
+    }
+
+    private static TValue? NormalizeOutputValue<TValue>(System.Data.Common.DbParameter parameter, DbDataType? dataType)
+    {
+        if (dataType.HasValue)
+        {
+            return (TValue?)OutputParameterConverter.Normalize(parameter.Value, dataType.Value);
+        }
+
+        return parameter.Value is DBNull ? default : (TValue?)parameter.Value;
     }
 
     private static Dictionary<string, DbParameter>? BuildParameterLookup(IReadOnlyList<DbParameter>? parameters)
