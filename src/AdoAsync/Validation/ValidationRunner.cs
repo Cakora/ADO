@@ -6,7 +6,7 @@ namespace AdoAsync.Validation;
 /// <summary>
 /// Runs validators when enabled and maps failures to DbError.
 /// </summary>
-public static class ValidationOrchestrator
+public static class ValidationRunner
 {
     #region Public API
     /// <summary>Validates a value when enabled.</summary>

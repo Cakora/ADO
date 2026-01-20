@@ -79,7 +79,7 @@ public sealed class DbExecutor : IDbExecutor
             exception => MapProviderError(options.DatabaseType, exception).IsTransient,
             isInUserTransaction);
 
-        var validationError = ValidationOrchestrator.ValidateOptions(options, options.EnableValidation, optionsValidator);
+        var validationError = ValidationRunner.ValidateOptions(options, options.EnableValidation, optionsValidator);
         if (validationError is not null)
         {
             throw new DatabaseException(ErrorCategory.Configuration, $"Invalid DbOptions: {validationError.MessageKey}");
@@ -94,7 +94,7 @@ public sealed class DbExecutor : IDbExecutor
     public async ValueTask<int> ExecuteAsync(CommandDefinition command, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
-        var validationError = ValidationOrchestrator.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
+        var validationError = ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
             throw new DbClientException(validationError);
@@ -118,7 +118,7 @@ public sealed class DbExecutor : IDbExecutor
     public async ValueTask<T> ExecuteScalarAsync<T>(CommandDefinition command, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
-        var validationError = ValidationOrchestrator.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
+        var validationError = ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
             throw new DbClientException(validationError);
@@ -154,7 +154,7 @@ public sealed class DbExecutor : IDbExecutor
     public IAsyncEnumerable<T> QueryAsync<T>(CommandDefinition command, Func<IDataRecord, T> map, CancellationToken cancellationToken = default)
     {
         Validate.Required(map, nameof(map));
-        var validationError = ValidationOrchestrator.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
+        var validationError = ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
             throw new DbClientException(validationError);
@@ -168,7 +168,7 @@ public sealed class DbExecutor : IDbExecutor
     public async ValueTask<DbResult> QueryTablesAsync(CommandDefinition command, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
-        var validationError = ValidationOrchestrator.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
+        var validationError = ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
         if (validationError is not null)
         {
             return new DbResult { Success = false, Error = validationError };
@@ -220,7 +220,7 @@ public sealed class DbExecutor : IDbExecutor
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
 
-        var validationError = ValidationOrchestrator.ValidateBulkImport(request, _options.EnableValidation, _bulkImportValidator);
+        var validationError = ValidationRunner.ValidateBulkImport(request, _options.EnableValidation, _bulkImportValidator);
         if (validationError is not null)
         {
             return new BulkImportResult { Success = false, Error = validationError };
