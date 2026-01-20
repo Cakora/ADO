@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using FluentValidation;
 
@@ -10,19 +9,25 @@ namespace AdoAsync.Validation;
 public static class ValidationOrchestrator
 {
     #region Public API
-    /// <summary>Validates options when enabled.</summary>
-    public static DbError? ValidateOptions(DbOptions options, bool enableValidation, IValidator<DbOptions> validator)
+    /// <summary>Validates a value when enabled.</summary>
+    public static DbError? Validate<T>(T value, bool enableValidation, IValidator<T> validator)
     {
         if (!enableValidation)
         {
             return null;
         }
 
-        Validate.Required(options, nameof(options));
-        Validate.Required(validator, nameof(validator));
+        global::AdoAsync.Validate.Required(value, nameof(value));
+        global::AdoAsync.Validate.Required(validator, nameof(validator));
 
-        var result = validator.Validate(options);
+        var result = validator.Validate(value);
         return result.IsValid ? null : ToError(result.Errors);
+    }
+
+    /// <summary>Validates options when enabled.</summary>
+    public static DbError? ValidateOptions(DbOptions options, bool enableValidation, IValidator<DbOptions> validator)
+    {
+        return Validate(options, enableValidation, validator);
     }
 
     /// <summary>Validates a command and its parameters when enabled.</summary>
@@ -33,15 +38,12 @@ public static class ValidationOrchestrator
             return null;
         }
 
-        Validate.Required(command, nameof(command));
-        Validate.Required(validator, nameof(validator));
-        Validate.Required(parameterValidator, nameof(parameterValidator));
+        global::AdoAsync.Validate.Required(command, nameof(command));
+        global::AdoAsync.Validate.Required(validator, nameof(validator));
+        global::AdoAsync.Validate.Required(parameterValidator, nameof(parameterValidator));
 
-        var result = validator.Validate(command);
-        if (!result.IsValid)
-        {
-            return ToError(result.Errors);
-        }
+        var commandError = Validate(command, enableValidation, validator);
+        if (commandError is not null) return commandError;
 
         if (command.Parameters is { } parameters)
         {
@@ -62,16 +64,7 @@ public static class ValidationOrchestrator
     /// <summary>Validates bulk import requests when enabled.</summary>
     public static DbError? ValidateBulkImport(BulkImportRequest request, bool enableValidation, IValidator<BulkImportRequest> validator)
     {
-        if (!enableValidation)
-        {
-            return null;
-        }
-
-        Validate.Required(request, nameof(request));
-        Validate.Required(validator, nameof(validator));
-
-        var result = validator.Validate(request);
-        return result.IsValid ? null : ToError(result.Errors);
+        return Validate(request, enableValidation, validator);
     }
     #endregion
 
