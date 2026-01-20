@@ -24,6 +24,9 @@ public interface IDbExecutor : IAsyncDisposable
     // Explicit mapper keeps this fast; automatic mapping can be added later as an optional wrapper.
     IAsyncEnumerable<T> QueryAsync<T>(CommandDefinition command, Func<IDataRecord, T> map, CancellationToken cancellationToken = default);
 
+    /// <summary>Streams multiple result sets with per-set mappers (non-buffered).</summary>
+    IAsyncEnumerable<(int SetIndex, T Item)> QueryMultiAsync<T>(CommandDefinition command, Func<IDataRecord, T>[] mappers, CancellationToken cancellationToken = default);
+
     /// <summary>Executes a command and materializes results into tables (allocation-heavy).</summary>
     // Use when streaming isn't an option (e.g., DataSet/DataTable consumers).
     ValueTask<DbResult> QueryTablesAsync(CommandDefinition command, CancellationToken cancellationToken = default);
