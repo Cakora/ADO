@@ -94,7 +94,7 @@ public sealed class DbExecutor : IDbExecutor
     public async ValueTask<int> ExecuteAsync(CommandDefinition command, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
-        var validationError = ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
+        var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
             throw new DbCallerException(validationError);
@@ -118,7 +118,7 @@ public sealed class DbExecutor : IDbExecutor
     public async ValueTask<T> ExecuteScalarAsync<T>(CommandDefinition command, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
-        var validationError = ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
+        var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
             throw new DbCallerException(validationError);
@@ -154,7 +154,7 @@ public sealed class DbExecutor : IDbExecutor
     public IAsyncEnumerable<T> QueryAsync<T>(CommandDefinition command, Func<IDataRecord, T> map, CancellationToken cancellationToken = default)
     {
         Validate.Required(map, nameof(map));
-        var validationError = ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
+        var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
             throw new DbCallerException(validationError);
@@ -187,7 +187,7 @@ public sealed class DbExecutor : IDbExecutor
     {
         // Guard executor state and command validity.
         await EnsureNotDisposedAsync().ConfigureAwait(false);
-        var validationError = ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
+        var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
             throw new DbCallerException(validationError);
@@ -245,10 +245,7 @@ public sealed class DbExecutor : IDbExecutor
         Func<IDataRecord, T>[] mappers,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var transaction = _activeTransaction is null
-            ? await _connection!.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
-            : null;
+        await using var transaction = await GetRefCursorTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         await using var dbCommand = await CreateCommandAsync(command, cancellationToken).ConfigureAwait(false);
         if (transaction is not null)
@@ -258,14 +255,7 @@ public sealed class DbExecutor : IDbExecutor
 
         await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
-        var cursorNames = new List<string>();
-        foreach (System.Data.Common.DbParameter parameter in dbCommand.Parameters)
-        {
-            if (parameter.Direction == ParameterDirection.Output && parameter.Value is string cursorName && !string.IsNullOrWhiteSpace(cursorName))
-            {
-                cursorNames.Add(cursorName);
-            }
-        }
+        var cursorNames = CollectPostgresCursorNames(dbCommand);
 
         if (cursorNames.Count > mappers.Length)
         {
@@ -329,7 +319,7 @@ public sealed class DbExecutor : IDbExecutor
     public async ValueTask<DbResult> QueryTablesAsync(CommandDefinition command, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
-        var validationError = ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
+        var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
             return new DbResult { Success = false, Error = validationError };
@@ -537,6 +527,8 @@ public sealed class DbExecutor : IDbExecutor
     #endregion
 
     #region Private Helpers
+
+    #region Connection helpers
     private async ValueTask EnsureConnectionAsync(CancellationToken cancellationToken)
     {
         if (_connection is null)
@@ -568,6 +560,9 @@ public sealed class DbExecutor : IDbExecutor
         return dbCommand;
     }
 
+    #endregion
+
+    #region Command routing and validation
     private bool ShouldUseOracleRefCursorPath(CommandDefinition command) =>
         // Oracle returns ref cursors as output parameters instead of result sets.
         _options.DatabaseType == DatabaseType.Oracle
@@ -582,6 +577,41 @@ public sealed class DbExecutor : IDbExecutor
         && command.Parameters is { Count: > 0 }
         && command.Parameters.Any(p => p.DataType == DbDataType.RefCursor);
 
+    private DbError? ValidateCommandDefinition(CommandDefinition command) =>
+        ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
+    #endregion
+
+    #region Refcursor transaction helpers
+    /// <summary>
+    /// For refcursor scenarios: reuse the caller's transaction when present; otherwise start a short-lived transaction.
+    /// </summary>
+    private async ValueTask<DbTransaction?> GetRefCursorTransactionAsync(CancellationToken cancellationToken)
+    {
+        await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
+        return _activeTransaction is null
+            ? await _connection!.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
+            : null;
+    }
+
+    /// <summary>Collect output refcursor names after executing a PostgreSQL stored procedure.</summary>
+    private static List<string> CollectPostgresCursorNames(DbCommand dbCommand)
+    {
+        var names = new List<string>();
+        foreach (System.Data.Common.DbParameter parameter in dbCommand.Parameters)
+        {
+            if (parameter.Direction == ParameterDirection.Output
+                && parameter.Value is string cursorName
+                && !string.IsNullOrWhiteSpace(cursorName))
+            {
+                names.Add(cursorName);
+            }
+        }
+
+        return names;
+    }
+    #endregion
+
+    #region Refcursor execution
     private async ValueTask<DbResult> ExecuteOracleRefCursorsAsync(CommandDefinition command, CancellationToken cancellationToken)
     {
         try
@@ -613,12 +643,8 @@ public sealed class DbExecutor : IDbExecutor
         {
             return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
-                await EnsureConnectionAsync(ct).ConfigureAwait(false);
-                // Refcursor fetches require a transaction scope in PostgreSQL.
-                // If the caller already started a transaction, reuse it instead of creating a nested transaction.
-                await using var transaction = _activeTransaction is null
-                    ? await _connection!.BeginTransactionAsync(ct).ConfigureAwait(false)
-                    : null;
+                // Refcursor fetches require a transaction scope in PostgreSQL; start one only when the caller has not.
+                await using var transaction = await GetRefCursorTransactionAsync(ct).ConfigureAwait(false);
                 await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
                 if (transaction is not null)
                 {
@@ -632,10 +658,10 @@ public sealed class DbExecutor : IDbExecutor
                         .ReadRefCursorResultsAsync(dbCommand, _connection!, transaction ?? _activeTransaction!, ct)
                         .ConfigureAwait(false);
 
-                    if (transaction is not null)
-                    {
-                        await transaction.CommitAsync(ct).ConfigureAwait(false);
-                    }
+                if (transaction is not null)
+                {
+                    await transaction.CommitAsync(ct).ConfigureAwait(false);
+                }
 
                     return new DbResult
                     {
@@ -661,6 +687,9 @@ public sealed class DbExecutor : IDbExecutor
         }
     }
 
+    #endregion
+
+    #region Output parameter helpers
     // Extracts non-input parameters, skipping refcursors (handled as result sets) and normalizing via declared DbDataType.
     private static IReadOnlyDictionary<string, TValue?>? ExtractOutputParameters<TValue>(
         DbCommand command,
@@ -733,12 +762,16 @@ public sealed class DbExecutor : IDbExecutor
 
         return name[0] is '@' or ':' or '?' ? name[1..] : name;
     }
+    #endregion
+
+    #region Streaming iterators
 
     private async IAsyncEnumerable<T> QueryAsyncIterator<T>(
         CommandDefinition command,
         Func<IDataRecord, T> map,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // Ensure the executor wasn't disposed before opening readers/commands.
         await EnsureNotDisposedAsync().ConfigureAwait(false);
 
         await using var enumerator = ExecuteQueryAsync(command, map, cancellationToken)
@@ -779,6 +812,11 @@ public sealed class DbExecutor : IDbExecutor
         }
     }
 
+    #endregion
+
+    #region Execution and resilience helpers
+
+    /// <summary>Throws when the executor has been disposed to avoid using torn state.</summary>
     private async ValueTask EnsureNotDisposedAsync()
     {
         if (_disposed)
@@ -849,6 +887,9 @@ public sealed class DbExecutor : IDbExecutor
         return MapProviderError(_options.DatabaseType, exception);
     }
 
+    #endregion
+
+    #region Provider resolution
     private static IDbProvider ResolveProvider(DatabaseType databaseType) =>
         databaseType switch
         {
@@ -866,5 +907,6 @@ public sealed class DbExecutor : IDbExecutor
             DatabaseType.Oracle => OracleExceptionMapper.Map(exception),
             _ => DbErrorMapper.Unknown(exception)
         };
+    #endregion
     #endregion
 }
