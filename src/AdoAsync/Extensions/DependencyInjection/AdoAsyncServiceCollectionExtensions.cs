@@ -29,6 +29,15 @@ public static class AdoAsyncServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Registers a named database options entry using an enum key and the shared <see cref="IDbExecutorFactory"/>.
+    /// </summary>
+    public static IServiceCollection AddAdoAsync<TName>(this IServiceCollection services, TName name, DbOptions options)
+        where TName : struct, Enum
+    {
+        return services.AddAdoAsync(name.ToString(), options);
+    }
+
+    /// <summary>
     /// Registers the default database options entry and adds scoped <see cref="IDbExecutor"/> for that default.
     /// </summary>
     public static IServiceCollection AddAdoAsync(this IServiceCollection services, DbOptions options)
@@ -52,5 +61,13 @@ public static class AdoAsyncServiceCollectionExtensions
         services.AddScoped<IDbExecutor>(sp => sp.GetRequiredService<IDbExecutorFactory>().Create(name.Trim()));
         return services;
     }
-}
 
+    /// <summary>
+    /// Registers a scoped <see cref="IDbExecutor"/> for a named database using an enum key.
+    /// </summary>
+    public static IServiceCollection AddAdoAsyncExecutor<TName>(this IServiceCollection services, TName name)
+        where TName : struct, Enum
+    {
+        return services.AddAdoAsyncExecutor(name.ToString());
+    }
+}

@@ -33,6 +33,26 @@ See `IMPLEMENTATION_GUIDE.md` for the full behavior and guardrails.
 
 You can also supply a provider `DbDataSource` via `DbOptions.DataSource` to reuse configured data sources when supported by your provider.
 
+## Dependency Injection (Multi-DB)
+`DbExecutor` is not thread-safe, so register it as `Scoped` and use a factory for multiple databases.
+
+Enum keys are supported for convenience (stored internally as names via `ToString()`):
+```csharp
+using AdoAsync.Abstractions;
+using AdoAsync.DependencyInjection;
+
+public enum DbKey { Main, Reporting }
+
+builder.Services.AddAdoAsync(DbKey.Main, new DbOptions { DatabaseType = DatabaseType.SqlServer, ConnectionString = "...", CommandTimeoutSeconds = 30 });
+builder.Services.AddAdoAsync(DbKey.Reporting, new DbOptions { DatabaseType = DatabaseType.PostgreSql, ConnectionString = "...", CommandTimeoutSeconds = 30 });
+
+var app = builder.Build();
+
+// Resolve on demand
+var factory = app.Services.GetRequiredService<IDbExecutorFactory>();
+await using var reporting = factory.Create(DbKey.Reporting);
+```
+
 ## Read Patterns (3 ways)
 
 ### 1) Simple Reader (ADO.NET)
