@@ -24,7 +24,7 @@ public sealed record DbError
     /// <summary>Optional localized message (if available).</summary>
     public string? LocalizedMessage { get; init; }
 
-    /// <summary>Indicates whether the error is considered transient.</summary>
+    /// <summary>Indicates whether the error is considered transient (safe to retry/backoff).</summary>
     public bool IsTransient { get; init; }
 
     /// <summary>Optional provider-specific details for diagnostics (never raw exceptions).</summary>

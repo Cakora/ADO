@@ -17,15 +17,35 @@ public static class OracleExceptionMapper
             return DbErrorMapper.Map(exception);
         }
 
-        return oraEx.Number switch
+        return ErrorRuleMatcher.Map(oraEx, Rules, DbErrorMapper.Unknown);
+    }
+    #endregion
+
+    #region Helpers
+    private static DbError Build(OracleException exception, DbErrorType type, DbErrorCode code, bool isTransient, string messageKey)
+    {
+        return new DbError
         {
-            // Oracle error numbers are the most reliable cross-version signal.
-            1013 => DbErrorMapper.Unknown(oraEx) with { Type = DbErrorType.Timeout, Code = DbErrorCode.GenericTimeout, IsTransient = true },
-            12170 => DbErrorMapper.Unknown(oraEx) with { Type = DbErrorType.Timeout, Code = DbErrorCode.GenericTimeout, IsTransient = true },
-            12514 or 12541 => DbErrorMapper.Unknown(oraEx) with { Type = DbErrorType.ConnectionFailure, Code = DbErrorCode.ConnectionLost, IsTransient = true },
-            1000 => DbErrorMapper.Unknown(oraEx) with { Type = DbErrorType.ResourceLimit, Code = DbErrorCode.ResourceLimitExceeded, IsTransient = false },
-            _ => DbErrorMapper.Unknown(oraEx)
+            Type = type,
+            Code = code,
+            MessageKey = messageKey,
+            MessageParameters = new[] { exception.Number.ToString(), exception.Message },
+            IsTransient = isTransient,
+            ProviderDetails = $"OracleException#{exception.Number}"
         };
     }
+
+    private static readonly ErrorRule<OracleException>[] Rules =
+    {
+        // Oracle error numbers are the most reliable cross-version signal.
+        new(ora => ora.Number == 1013, ora => Build(ora, DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.oracle.timeout")),
+        new(ora => ora.Number == 12170, ora => Build(ora, DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.oracle.timeout")),
+        new(ora => ora.Number is 12514 or 12541, ora => Build(ora, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.oracle.connection_failure")),
+        new(ora => ora.Number == 1000, ora => Build(ora, DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, false, "errors.oracle.resource_limit")),
+
+        // Text-based fallback when no reliable number is present.
+        new(ora => ora.Number == 0 && ora.Message.Contains("broken pipe", StringComparison.OrdinalIgnoreCase),
+            ora => Build(ora, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.oracle.connection_broken"))
+    };
     #endregion
 }

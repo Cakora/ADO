@@ -17,17 +17,37 @@ public static class PostgreSqlExceptionMapper
             return DbErrorMapper.Map(exception);
         }
 
-        return pgEx.SqlState switch
+        return ErrorRuleMatcher.Map(pgEx, Rules, DbErrorMapper.Unknown);
+    }
+    #endregion
+
+    #region Helpers
+    private static DbError Build(PostgresException exception, DbErrorType type, DbErrorCode code, bool isTransient, string messageKey)
+    {
+        return new DbError
         {
-            // SQLSTATE values are stable across PostgreSQL versions.
-            PostgresErrorCodes.DeadlockDetected => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.Deadlock, Code = DbErrorCode.GenericDeadlock, IsTransient = true },
-            PostgresErrorCodes.LockNotAvailable => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.ResourceLimit, Code = DbErrorCode.ResourceLimitExceeded, IsTransient = true },
-            PostgresErrorCodes.SerializationFailure => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.Deadlock, Code = DbErrorCode.GenericDeadlock, IsTransient = true },
-            PostgresErrorCodes.QueryCanceled => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.Timeout, Code = DbErrorCode.GenericTimeout, IsTransient = true },
-            PostgresErrorCodes.ConnectionException => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.ConnectionFailure, Code = DbErrorCode.ConnectionLost, IsTransient = true },
-            PostgresErrorCodes.SyntaxError => DbErrorMapper.Unknown(pgEx) with { Type = DbErrorType.SyntaxError, Code = DbErrorCode.SyntaxError, IsTransient = false },
-            _ => DbErrorMapper.Unknown(pgEx)
+            Type = type,
+            Code = code,
+            MessageKey = messageKey,
+            MessageParameters = new[] { exception.SqlState, exception.MessageText ?? exception.Message },
+            IsTransient = isTransient,
+            ProviderDetails = $"PostgresException#{exception.SqlState}"
         };
     }
+
+    private static readonly ErrorRule<PostgresException>[] Rules =
+    {
+        // SQLSTATE values are stable across PostgreSQL versions.
+        new(pg => pg.SqlState == PostgresErrorCodes.DeadlockDetected, pg => Build(pg, DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, true, "errors.postgresql.deadlock")),
+        new(pg => pg.SqlState == PostgresErrorCodes.LockNotAvailable, pg => Build(pg, DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, true, "errors.postgresql.lock_not_available")),
+        new(pg => pg.SqlState == PostgresErrorCodes.SerializationFailure, pg => Build(pg, DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, true, "errors.postgresql.serialization_failure")),
+        new(pg => pg.SqlState == PostgresErrorCodes.QueryCanceled, pg => Build(pg, DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.postgresql.query_canceled")),
+        new(pg => pg.SqlState == PostgresErrorCodes.ConnectionException, pg => Build(pg, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.postgresql.connection_exception")),
+        new(pg => pg.SqlState == PostgresErrorCodes.SyntaxError, pg => Build(pg, DbErrorType.SyntaxError, DbErrorCode.SyntaxError, false, "errors.postgresql.syntax_error")),
+
+        // Text-based fallback when SQLSTATE is missing/empty.
+        new(pg => string.IsNullOrWhiteSpace(pg.SqlState) && (pg.MessageText ?? pg.Message).Contains("terminating connection", StringComparison.OrdinalIgnoreCase),
+            pg => Build(pg, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.postgresql.connection_terminated"))
+    };
     #endregion
 }

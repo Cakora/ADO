@@ -17,15 +17,35 @@ public static class SqlServerExceptionMapper
             return DbErrorMapper.Map(exception);
         }
 
-        return sqlEx.Number switch
+        return ErrorRuleMatcher.Map(sqlEx, Rules, DbErrorMapper.Unknown);
+    }
+    #endregion
+
+    #region Helpers
+    private static DbError Build(SqlException exception, DbErrorType type, DbErrorCode code, bool isTransient, string messageKey)
+    {
+        return new DbError
         {
-            // Map common SQL Server error numbers into stable categories.
-            4060 or 18456 => DbErrorMapper.Unknown(sqlEx) with { Type = DbErrorType.ConnectionFailure, Code = DbErrorCode.ConnectionLost, IsTransient = true },
-            1205 => DbErrorMapper.Unknown(sqlEx) with { Type = DbErrorType.Deadlock, Code = DbErrorCode.GenericDeadlock, IsTransient = true },
-            10928 or 10929 => DbErrorMapper.Unknown(sqlEx) with { Type = DbErrorType.ResourceLimit, Code = DbErrorCode.ResourceLimitExceeded, IsTransient = true },
-            -2 => DbErrorMapper.Unknown(sqlEx) with { Type = DbErrorType.Timeout, Code = DbErrorCode.GenericTimeout, IsTransient = true },
-            _ => DbErrorMapper.Unknown(sqlEx)
+            Type = type,
+            Code = code,
+            MessageKey = messageKey,
+            MessageParameters = new[] { exception.Number.ToString(), exception.Message },
+            IsTransient = isTransient,
+            ProviderDetails = $"SqlException#{exception.Number}"
         };
     }
+
+    private static readonly ErrorRule<SqlException>[] Rules =
+    {
+        // Numeric rules
+        new(sql => sql.Number is 4060 or 18456, sql => Build(sql, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.sqlserver.login_failed")),
+        new(sql => sql.Number == 1205, sql => Build(sql, DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, true, "errors.sqlserver.deadlock")),
+        new(sql => sql.Number is 10928 or 10929, sql => Build(sql, DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, true, "errors.sqlserver.resource_limit")),
+        new(sql => sql.Number == -2, sql => Build(sql, DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.sqlserver.timeout")),
+
+        // Text-based rule for when no numeric code is set.
+        new(sql => sql.Number == 0 && sql.Message.Contains("transport-level error", StringComparison.OrdinalIgnoreCase),
+            sql => Build(sql, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.sqlserver.transport_error"))
+    };
     #endregion
 }

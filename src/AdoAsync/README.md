@@ -13,8 +13,35 @@ Async-first ADO.NET helper that keeps provider logic contained for SQL Server, P
 
 ## Errors and Exceptions
 - Prefer `DbResult.Error` where available (no thrown provider exceptions).
-- When exceptions are thrown, catch `DbCallerException` and read `DbCallerException.Error`.
+- When exceptions are thrown, catch `DbCallerException` only (single caller-facing type) and read `DbCallerException.Error`.
 - `DbClientException` exists only as a legacy name; prefer `DbCallerException`.
+- Error fields: `Type`/`Code` (category + stable code), `MessageKey`/`MessageParameters` (localization), `IsTransient` (safe to retry/backoff), `ProviderDetails` (sanitized diagnostics). `IsTransient` only influences retry when `DbOptions.EnableRetry` is true (default is off), so marking an error transient does not force retries unless you opt in.
+
+Caller handling pattern:
+```csharp
+try
+{
+    var rows = await executor.ExecuteAsync(new CommandDefinition("update dbo.Items set Processed = 1"));
+}
+catch (DbCallerException ex)
+{
+    // Use structured info instead of parsing messages.
+    switch (ex.ErrorType)
+    {
+        case DbErrorType.Timeout:
+            // maybe retry or show timeout-specific message
+            break;
+        case DbErrorType.ConnectionFailure:
+            // handle connection drop (can inspect ex.IsTransient)
+            break;
+        default:
+            // fallback logging; use ex.ErrorCode / ex.MessageKey for localization
+            break;
+    }
+
+    // Provider diagnostics (non-sensitive) are in ex.ProviderDetails.
+}
+```
 
 ## Quick Start
 ```csharp
