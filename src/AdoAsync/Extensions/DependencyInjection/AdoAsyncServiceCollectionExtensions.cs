@@ -84,6 +84,6 @@ public static class DbExecutorFactoryExtensions
         where TName : struct, Enum
     {
         Validate.Required(factory, nameof(factory));
-        return factory.Create(name.ToString(), isInUserTransaction);
+        return factory.Create(name, isInUserTransaction);
     }
 }

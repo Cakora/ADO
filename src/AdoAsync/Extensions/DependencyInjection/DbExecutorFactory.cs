@@ -46,6 +46,11 @@ internal sealed class DbExecutorFactory : IDbExecutorFactory
         return Create(options, isInUserTransaction);
     }
 
+    public IDbExecutor Create<TName>(TName name, bool isInUserTransaction = false) where TName : struct, Enum
+    {
+        return Create(name.ToString(), isInUserTransaction);
+    }
+
     public IDbExecutor Create(DbOptions options, bool isInUserTransaction = false)
     {
         return DbExecutor.Create(options, isInUserTransaction);

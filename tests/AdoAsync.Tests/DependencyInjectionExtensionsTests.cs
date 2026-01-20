@@ -7,19 +7,25 @@ namespace AdoAsync.Tests;
 
 public sealed class DependencyInjectionExtensionsTests
 {
+    private enum DbKey
+    {
+        Main,
+        Reporting
+    }
+
     [Fact]
     public async Task AddAdoAsync_RegistersFactory_AndCreatesExecutorsByName()
     {
         var services = new ServiceCollection();
 
-        services.AddAdoAsync("Main", CreateValidOptions(DatabaseType.SqlServer));
-        services.AddAdoAsync("Reporting", CreateValidOptions(DatabaseType.PostgreSql));
+        services.AddAdoAsync(DbKey.Main, CreateValidOptions(DatabaseType.SqlServer));
+        services.AddAdoAsync(DbKey.Reporting, CreateValidOptions(DatabaseType.PostgreSql));
 
         await using var provider = services.BuildServiceProvider();
         var factory = provider.GetRequiredService<IDbExecutorFactory>();
 
-        await using var main = factory.Create("Main");
-        await using var reporting = factory.Create("Reporting");
+        await using var main = factory.Create(DbKey.Main);
+        await using var reporting = factory.Create(DbKey.Reporting);
 
         main.Should().NotBeNull();
         reporting.Should().NotBeNull();
