@@ -41,26 +41,23 @@ You can also supply a provider `DbDataSource` via `DbOptions.DataSource` to reus
 ## Dependency Injection (Multi-DB)
 `DbExecutor` is not thread-safe, so register it as `Scoped` and use a factory for multiple databases.
 
-If options change per call, register only the factory and create executors from per-call options:
+If the connection string changes per call (tenant DBs, dynamic routing, etc.), register only the factory and pass the connection string at call time:
 ```csharp
 using AdoAsync.Abstractions;
 using AdoAsync.DependencyInjection;
 
 builder.Services.AddAdoAsyncFactory();
-
-// Your app decides per-call values (timeout/retry/connection string/tenant, etc.)
-var baseOptions = new DbOptions { DatabaseType = DatabaseType.SqlServer, ConnectionString = "...", CommandTimeoutSeconds = 30 };
-builder.Services.AddSingleton(baseOptions);
 ```
 
 ```csharp
-public sealed class MyService(IDbExecutorFactory factory, DbOptions baseOptions)
+public sealed class MyService(IDbExecutorFactory factory)
 {
-    public async Task RunAsync(bool enableRetry, int timeoutSeconds)
+    public Task<int> RunAsync(string connectionString)
     {
-        var options = baseOptions with { EnableRetry = enableRetry, CommandTimeoutSeconds = timeoutSeconds };
-        await using var exec = factory.Create(options);
-        await exec.ExecuteAsync(new CommandDefinition("select 1"));
+        return SqlServerAdo.ExecuteAsync(
+            factory,
+            connectionString,
+            new CommandDefinition("select 1"));
     }
 }
 ```
