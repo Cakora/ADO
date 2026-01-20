@@ -266,6 +266,25 @@ var customerTable = result.Tables![0];
 var ordersTable = result.Tables![1];
 ```
 
+Typed mapping (single cursor) is supported via `QueryAsync<T>`:
+```csharp
+await foreach (var customer in executor.QueryAsync(
+    new CommandDefinition
+    {
+        CommandText = "select id, name from customers",
+        CommandType = CommandType.Text
+    },
+    record => new Customer
+    {
+        Id = record.Get<int>(0),
+        Name = record.Get<string>(1)
+    }))
+{
+    // process customer
+}
+```
+For multi-cursor PostgreSQL procedures, prefer `QueryTablesAsync` and map from `DataTable` as shown above.
+
 ### Oracle (RefCursor outputs)
 Oracle returns multi-result sets via `RefCursor` output parameters:
 ```csharp
@@ -284,6 +303,25 @@ var result = await executor.QueryTablesAsync(new CommandDefinition
 var customerTable = result.Tables![0];
 var ordersTable = result.Tables![1];
 ```
+
+Typed mapping (single cursor) is supported via `QueryAsync<T>`:
+```csharp
+await foreach (var customer in executor.QueryAsync(
+    new CommandDefinition
+    {
+        CommandText = "select Id, Name from Customers",
+        CommandType = CommandType.Text
+    },
+    record => new Customer
+    {
+        Id = record.Get<int>(0),
+        Name = record.Get<string>(1)
+    }))
+{
+    // process customer
+}
+```
+For multi-cursor Oracle procedures, prefer `QueryTablesAsync` and map from `DataTable` as shown above.
 
 Multi-result stored procedure -> `QueryTablesAsync` returns multiple tables:
 ```csharp
