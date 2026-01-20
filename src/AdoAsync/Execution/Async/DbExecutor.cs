@@ -661,18 +661,34 @@ public sealed class DbExecutor : IDbExecutor
         }
     }
 
+    // Extracts non-input parameters, skipping refcursors (handled as result sets) and normalizing via declared DbDataType.
     private static IReadOnlyDictionary<string, TValue?>? ExtractOutputParameters<TValue>(
         DbCommand command,
         IReadOnlyList<DbParameter>? parameters)
     {
+        // Gather caller-specified output metadata (names, DbDataType) so we can normalize values and skip refcursors.
+        if (parameters is null || parameters.Count == 0)
+        {
+            return null;
+        }
+
         if (command.Parameters.Count == 0)
         {
             return null;
         }
 
-        var parameterLookup = parameters is null || parameters.Count == 0
-            ? null
-            : BuildParameterLookup(parameters);
+        // Build a quick lookup so we can normalize by declared DbDataType and skip refcursors.
+        Dictionary<string, DbParameter>? parameterLookup = null;
+        if (parameters is { Count: > 0 })
+        {
+            parameterLookup = new Dictionary<string, DbParameter>(StringComparer.OrdinalIgnoreCase);
+            foreach (var parameter in parameters)
+            {
+                // Use trimmed names so provider prefixes don't break matching.
+                var name = TrimParameterPrefix(parameter.Name);
+                parameterLookup[name] = parameter;
+            }
+        }
 
         Dictionary<string, TValue?>? outputValues = null;
 
@@ -687,44 +703,25 @@ public sealed class DbExecutor : IDbExecutor
             DbParameter? definition = null;
             var hasDefinition = parameterLookup is not null && parameterLookup.TryGetValue(name, out definition);
 
+            // Refcursor outputs are consumed separately as result sets; ignore their parameter values.
             if (hasDefinition && definition!.DataType == DbDataType.RefCursor)
             {
                 continue;
             }
 
             outputValues ??= new Dictionary<string, TValue?>(StringComparer.OrdinalIgnoreCase);
-            var dataType = hasDefinition ? definition!.DataType : (DbDataType?)null;
-            outputValues[name] = NormalizeOutputValue<TValue>(parameter, dataType);
+            if (hasDefinition)
+            {
+                outputValues[name] = (TValue?)OutputParameterConverter.Normalize(parameter.Value, definition!.DataType);
+            }
+            else
+            {
+                // No definition available; surface provider value (with DBNull → null) so callers still get the output.
+                outputValues[name] = parameter.Value is DBNull ? default : (TValue?)parameter.Value;
+            }
         }
 
         return outputValues;
-    }
-
-    private static TValue? NormalizeOutputValue<TValue>(System.Data.Common.DbParameter parameter, DbDataType? dataType)
-    {
-        if (dataType.HasValue)
-        {
-            return (TValue?)OutputParameterConverter.Normalize(parameter.Value, dataType.Value);
-        }
-
-        return parameter.Value is DBNull ? default : (TValue?)parameter.Value;
-    }
-
-    private static Dictionary<string, DbParameter>? BuildParameterLookup(IReadOnlyList<DbParameter>? parameters)
-    {
-        if (parameters is not { Count: > 0 })
-        {
-            return null;
-        }
-
-        var lookup = new Dictionary<string, DbParameter>(StringComparer.OrdinalIgnoreCase);
-        foreach (var parameter in parameters)
-        {
-            var name = TrimParameterPrefix(parameter.Name);
-            lookup[name] = parameter;
-        }
-
-        return lookup;
     }
 
     private static string TrimParameterPrefix(string name)
