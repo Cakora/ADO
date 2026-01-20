@@ -365,7 +365,7 @@ public sealed class DbExecutor : IDbExecutor
                 {
                     Success = true,
                     Tables = tables,
-                    OutputParameters = ExtractOutputParameters(dbCommand, command.Parameters)
+                    OutputParameters = ExtractOutputParameters<object?>(dbCommand, command.Parameters)
                 };
             }, cancellationToken).ConfigureAwait(false);
         }
@@ -596,7 +596,7 @@ public sealed class DbExecutor : IDbExecutor
                 {
                     Success = true,
                     Tables = tables,
-                    OutputParameters = ExtractOutputParameters(dbCommand, command.Parameters)
+                    OutputParameters = ExtractOutputParameters<object?>(dbCommand, command.Parameters)
                 };
             }, cancellationToken).ConfigureAwait(false);
         }
@@ -641,7 +641,7 @@ public sealed class DbExecutor : IDbExecutor
                     {
                         Success = true,
                         Tables = tables,
-                        OutputParameters = ExtractOutputParameters(dbCommand, command.Parameters)
+                        OutputParameters = ExtractOutputParameters<object?>(dbCommand, command.Parameters)
                     };
                 }
                 catch
@@ -661,7 +661,7 @@ public sealed class DbExecutor : IDbExecutor
         }
     }
 
-    private static IReadOnlyDictionary<string, object?>? ExtractOutputParameters(
+    private static IReadOnlyDictionary<string, TValue?>? ExtractOutputParameters<TValue>(
         DbCommand command,
         IReadOnlyList<DbParameter>? parameters)
     {
@@ -671,17 +671,30 @@ public sealed class DbExecutor : IDbExecutor
         }
 
         var parameterLookup = BuildParameterLookup(parameters);
-        Dictionary<string, object?>? outputValues = null;
+        Dictionary<string, TValue?>? outputValues = null;
 
         foreach (System.Data.Common.DbParameter parameter in command.Parameters)
         {
-            if (!TryGetOutputValue(parameter, parameterLookup, out var name, out var value))
+            if (parameter.Direction == ParameterDirection.Input)
             {
                 continue;
             }
 
-            outputValues ??= new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-            outputValues[name] = value;
+            var name = TrimParameterPrefix(parameter.ParameterName);
+            if (parameterLookup is not null && parameterLookup.TryGetValue(name, out var definition))
+            {
+                if (definition.DataType == DbDataType.RefCursor)
+                {
+                    continue;
+                }
+
+                outputValues ??= new Dictionary<string, TValue?>(StringComparer.OrdinalIgnoreCase);
+                outputValues[name] = (TValue?)OutputParameterConverter.Normalize(parameter.Value, definition.DataType);
+                continue;
+            }
+
+            outputValues ??= new Dictionary<string, TValue?>(StringComparer.OrdinalIgnoreCase);
+            outputValues[name] = parameter.Value is DBNull ? default : (TValue?)parameter.Value;
         }
 
         return outputValues;
@@ -702,35 +715,6 @@ public sealed class DbExecutor : IDbExecutor
         }
 
         return lookup;
-    }
-
-    private static bool TryGetOutputValue(
-        System.Data.Common.DbParameter parameter,
-        IReadOnlyDictionary<string, DbParameter>? parameterLookup,
-        out string name,
-        out object? value)
-    {
-        name = TrimParameterPrefix(parameter.ParameterName);
-        value = null;
-
-        if (parameter.Direction == ParameterDirection.Input)
-        {
-            return false;
-        }
-
-        if (parameterLookup is not null && parameterLookup.TryGetValue(name, out var definition))
-        {
-            if (definition.DataType == DbDataType.RefCursor)
-            {
-                return false;
-            }
-
-            value = OutputParameterConverter.Normalize(parameter.Value, definition.DataType);
-            return true;
-        }
-
-        value = parameter.Value is DBNull ? null : parameter.Value;
-        return true;
     }
 
     private static string TrimParameterPrefix(string name)
