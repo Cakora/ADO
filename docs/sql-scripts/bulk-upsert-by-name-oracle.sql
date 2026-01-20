@@ -1,5 +1,5 @@
 /*
-Bulk upsert from XML input by unique NAME (Oracle).
+Bulk upsert by unique NAME (Oracle) with XML or JSON input.
 
 Input XML format:
 <Items>
@@ -7,13 +7,22 @@ Input XML format:
   <Item SourceId="2" Name="Bob" />
 </Items>
 
+Input JSON format:
+{
+  "Items": [
+    { "SourceId": 1, "Name": "Alice" },
+    { "SourceId": 2, "Name": "Bob" }
+  ]
+}
+
 Behavior:
 - For each Item, match destination row by NAME (Oracle folds unquoted identifiers to uppercase; string comparisons depend on NLS/collation).
 - If NAME exists: reuse existing ID.
 - If NAME is new: insert and generate ID.
 - Marks destination row as imported (IS_IMPORTED = 1).
 - Returns a SYS_REFCURSOR mapping SOURCE_ID -> DESTINATION_ID with SUCCESS/INSERTED flags.
-- Processes distinct names in batches of 500 to keep DML predictable on large payloads.
+- Processes distinct names in batches (default 500) to keep DML predictable on large payloads.
+- INSERTED flag is computed from a snapshot of existing names taken before any inserts in this call.
 */
 
 -- Demo table (adjust schema/table/columns as needed)
@@ -44,19 +53,41 @@ EXCEPTION
 END;
 /
 
+-- Session-local snapshot table to compute INSERTED reliably (existing vs new) for the output cursor.
+BEGIN
+    EXECUTE IMMEDIATE '
+        CREATE GLOBAL TEMPORARY TABLE ITEM_CATALOG_EXISTING_NAMES
+        (
+            NAME VARCHAR2(200) NOT NULL,
+            CONSTRAINT PK_ITEM_CATALOG_EXISTING_NAMES PRIMARY KEY (NAME)
+        )
+        ON COMMIT DELETE ROWS';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE != -955 THEN -- ORA-00955: name is already used
+            RAISE;
+        END IF;
+END;
+/
+
 CREATE OR REPLACE PROCEDURE UPSERT_ITEM_CATALOG_FROM_XML
 (
     P_ITEMS_XML IN XMLTYPE,
+    P_BATCH_SIZE IN PLS_INTEGER DEFAULT 500,
     P_RESULT    OUT SYS_REFCURSOR
 )
 AS
     V_START_RN NUMBER := 1;
     V_TOTAL    NUMBER := 0;
+    V_BATCH_SIZE PLS_INTEGER := 500;
 BEGIN
+    V_BATCH_SIZE := CASE WHEN P_BATCH_SIZE IS NULL OR P_BATCH_SIZE <= 0 THEN 500 ELSE P_BATCH_SIZE END;
+
     -- Parse input XML into rows.
     -- NAME is trimmed; empty string becomes NULL in Oracle.
     -- Upsert by NAME without MERGE (batched):
-    -- 1) insert missing names in batches of 500
+    -- 1) snapshot existing names for INSERTED output
+    -- 2) insert missing names in batches (default 500)
     -- 2) update existing matches to set IS_IMPORTED = 1
     SELECT COUNT(1)
     INTO V_TOTAL
@@ -70,6 +101,22 @@ BEGIN
         ) X
         WHERE NULLIF(TRIM(X.NAME), '') IS NOT NULL
     );
+
+    DELETE FROM ITEM_CATALOG_EXISTING_NAMES;
+    INSERT INTO ITEM_CATALOG_EXISTING_NAMES(NAME)
+    SELECT DISTINCT T.NAME
+    FROM ITEM_CATALOG T
+    JOIN
+    (
+        SELECT DISTINCT NULLIF(TRIM(X.NAME), '') AS NAME
+        FROM XMLTABLE(
+            '/Items/Item'
+            PASSING P_ITEMS_XML
+            COLUMNS NAME VARCHAR2(200) PATH '@Name'
+        ) X
+        WHERE NULLIF(TRIM(X.NAME), '') IS NOT NULL
+    ) D
+        ON D.NAME = T.NAME;
 
     WHILE V_START_RN <= V_TOTAL LOOP
         -- Insert missing names for this batch.
@@ -94,7 +141,7 @@ BEGIN
                     WHERE NULLIF(TRIM(X.NAME), '') IS NOT NULL
                 ) D
             )
-            WHERE RN BETWEEN V_START_RN AND (V_START_RN + 499)
+            WHERE RN BETWEEN V_START_RN AND (V_START_RN + (V_BATCH_SIZE - 1))
         ) B
         WHERE NOT EXISTS (SELECT 1 FROM ITEM_CATALOG T WHERE T.NAME = B.NAME);
 
@@ -123,17 +170,23 @@ BEGIN
                         WHERE NULLIF(TRIM(X.NAME), '') IS NOT NULL
                     ) D
                 )
-                WHERE RN BETWEEN V_START_RN AND (V_START_RN + 499)
+                WHERE RN BETWEEN V_START_RN AND (V_START_RN + (V_BATCH_SIZE - 1))
             ) B
             WHERE B.NAME = T.NAME
         );
 
-        V_START_RN := V_START_RN + 500;
+        V_START_RN := V_START_RN + V_BATCH_SIZE;
     END LOOP;
 
     -- Return mapping list: one row per input item.
     OPEN P_RESULT FOR
-        WITH INPUT_ROWS AS
+        SELECT
+            I.SOURCE_ID,
+            T.ID AS DESTINATION_ID,
+            CASE WHEN I.NAME IS NOT NULL AND E.NAME IS NULL THEN 1 ELSE 0 END AS INSERTED,
+            CASE WHEN I.NAME IS NOT NULL THEN 1 ELSE 0 END AS SUCCESS,
+            CASE WHEN I.NAME IS NULL THEN 'Name is required' ELSE NULL END AS ERROR_MESSAGE
+        FROM
         (
             SELECT
                 X.SOURCE_ID,
@@ -145,28 +198,135 @@ BEGIN
                     SOURCE_ID NUMBER        PATH '@SourceId',
                     NAME      VARCHAR2(200) PATH '@Name'
             ) X
-        ),
-        DISTINCT_NAMES AS
+        ) I
+        LEFT JOIN ITEM_CATALOG T ON T.NAME = I.NAME
+        LEFT JOIN ITEM_CATALOG_EXISTING_NAMES E ON E.NAME = I.NAME
+        ORDER BY I.SOURCE_ID;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE UPSERT_ITEM_CATALOG_FROM_JSON
+(
+    P_ITEMS_JSON IN CLOB,
+    P_BATCH_SIZE IN PLS_INTEGER DEFAULT 500,
+    P_RESULT    OUT SYS_REFCURSOR
+)
+AS
+    V_START_RN NUMBER := 1;
+    V_TOTAL    NUMBER := 0;
+    V_BATCH_SIZE PLS_INTEGER := 500;
+BEGIN
+    V_BATCH_SIZE := CASE WHEN P_BATCH_SIZE IS NULL OR P_BATCH_SIZE <= 0 THEN 500 ELSE P_BATCH_SIZE END;
+
+    SELECT COUNT(1)
+    INTO V_TOTAL
+    FROM
+    (
+        SELECT DISTINCT NULLIF(TRIM(X.NAME), '') AS NAME
+        FROM JSON_TABLE(
+            P_ITEMS_JSON,
+            '$.Items[*]'
+            COLUMNS NAME VARCHAR2(200) PATH '$.Name'
+        ) X
+        WHERE NULLIF(TRIM(X.NAME), '') IS NOT NULL
+    );
+
+    DELETE FROM ITEM_CATALOG_EXISTING_NAMES;
+    INSERT INTO ITEM_CATALOG_EXISTING_NAMES(NAME)
+    SELECT DISTINCT T.NAME
+    FROM ITEM_CATALOG T
+    JOIN
+    (
+        SELECT DISTINCT NULLIF(TRIM(X.NAME), '') AS NAME
+        FROM JSON_TABLE(
+            P_ITEMS_JSON,
+            '$.Items[*]'
+            COLUMNS NAME VARCHAR2(200) PATH '$.Name'
+        ) X
+        WHERE NULLIF(TRIM(X.NAME), '') IS NOT NULL
+    ) D
+        ON D.NAME = T.NAME;
+
+    WHILE V_START_RN <= V_TOTAL LOOP
+        INSERT INTO ITEM_CATALOG (NAME, IS_IMPORTED)
+        SELECT B.NAME, 1
+        FROM
         (
-            SELECT DISTINCT NAME
-            FROM INPUT_ROWS
-            WHERE NAME IS NOT NULL
-        ),
-        EXISTING_NAMES AS
+            SELECT NAME
+            FROM
+            (
+                SELECT
+                    D.NAME,
+                    ROW_NUMBER() OVER (ORDER BY D.NAME) RN
+                FROM
+                (
+                    SELECT DISTINCT NULLIF(TRIM(X.NAME), '') AS NAME
+                    FROM JSON_TABLE(
+                        P_ITEMS_JSON,
+                        '$.Items[*]'
+                        COLUMNS NAME VARCHAR2(200) PATH '$.Name'
+                    ) X
+                    WHERE NULLIF(TRIM(X.NAME), '') IS NOT NULL
+                ) D
+            )
+            WHERE RN BETWEEN V_START_RN AND (V_START_RN + (V_BATCH_SIZE - 1))
+        ) B
+        WHERE NOT EXISTS (SELECT 1 FROM ITEM_CATALOG T WHERE T.NAME = B.NAME);
+
+        UPDATE ITEM_CATALOG T
+            SET T.IS_IMPORTED = 1
+        WHERE EXISTS
         (
-            SELECT T.NAME
-            FROM ITEM_CATALOG T
-            JOIN DISTINCT_NAMES D ON D.NAME = T.NAME
-        )
+            SELECT 1
+            FROM
+            (
+                SELECT NAME
+                FROM
+                (
+                    SELECT
+                        D.NAME,
+                        ROW_NUMBER() OVER (ORDER BY D.NAME) RN
+                    FROM
+                    (
+                        SELECT DISTINCT NULLIF(TRIM(X.NAME), '') AS NAME
+                        FROM JSON_TABLE(
+                            P_ITEMS_JSON,
+                            '$.Items[*]'
+                            COLUMNS NAME VARCHAR2(200) PATH '$.Name'
+                        ) X
+                        WHERE NULLIF(TRIM(X.NAME), '') IS NOT NULL
+                    ) D
+                )
+                WHERE RN BETWEEN V_START_RN AND (V_START_RN + (V_BATCH_SIZE - 1))
+            ) B
+            WHERE B.NAME = T.NAME
+        );
+
+        V_START_RN := V_START_RN + V_BATCH_SIZE;
+    END LOOP;
+
+    OPEN P_RESULT FOR
         SELECT
             I.SOURCE_ID,
             T.ID AS DESTINATION_ID,
             CASE WHEN I.NAME IS NOT NULL AND E.NAME IS NULL THEN 1 ELSE 0 END AS INSERTED,
             CASE WHEN I.NAME IS NOT NULL THEN 1 ELSE 0 END AS SUCCESS,
             CASE WHEN I.NAME IS NULL THEN 'Name is required' ELSE NULL END AS ERROR_MESSAGE
-        FROM INPUT_ROWS I
+        FROM
+        (
+            SELECT
+                X.SOURCE_ID,
+                NULLIF(TRIM(X.NAME), '') AS NAME
+            FROM JSON_TABLE(
+                P_ITEMS_JSON,
+                '$.Items[*]'
+                COLUMNS
+                    SOURCE_ID NUMBER        PATH '$.SourceId',
+                    NAME      VARCHAR2(200) PATH '$.Name'
+            ) X
+        ) I
         LEFT JOIN ITEM_CATALOG T ON T.NAME = I.NAME
-        LEFT JOIN EXISTING_NAMES E ON E.NAME = I.NAME
+        LEFT JOIN ITEM_CATALOG_EXISTING_NAMES E ON E.NAME = I.NAME
         ORDER BY I.SOURCE_ID;
 END;
 /
