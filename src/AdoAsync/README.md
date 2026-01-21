@@ -58,7 +58,7 @@ await using var executor = DbExecutor.Create(options);
 
 var rows = await executor.ExecuteAsync(new CommandDefinition(
     "update dbo.Items set Processed = 1 where Id = @id",
-    new[] { new DbParameter("id", DbDataType.Int32, 42) }));
+    new[] { new DbParameter { Name = "id", DataType = DbDataType.Int32, Value = 42, Direction = ParameterDirection.Input } }));
 ```
 
 See `IMPLEMENTATION_GUIDE.md` for the full behavior and guardrails.

@@ -355,7 +355,9 @@ public sealed class DbExecutor : IDbExecutor
                 {
                     Success = true,
                     Tables = tables,
-                    OutputParameters = ExtractOutputParameters<object?>(dbCommand, command.Parameters)
+                    OutputParameters = command.Parameters is { Count: > 0 }
+                        ? ExtractOutputParameters(dbCommand, command.Parameters)
+                        : null
                 };
             }, cancellationToken).ConfigureAwait(false);
         }
@@ -626,7 +628,9 @@ public sealed class DbExecutor : IDbExecutor
                 {
                     Success = true,
                     Tables = tables,
-                    OutputParameters = ExtractOutputParameters<object?>(dbCommand, command.Parameters)
+                    OutputParameters = command.Parameters is { Count: > 0 }
+                        ? ExtractOutputParameters(dbCommand, command.Parameters)
+                        : null
                 };
             }, cancellationToken).ConfigureAwait(false);
         }
@@ -667,7 +671,9 @@ public sealed class DbExecutor : IDbExecutor
                     {
                         Success = true,
                         Tables = tables,
-                        OutputParameters = ExtractOutputParameters<object?>(dbCommand, command.Parameters)
+                        OutputParameters = command.Parameters is { Count: > 0 }
+                            ? ExtractOutputParameters(dbCommand, command.Parameters)
+                            : null
                     };
                 }
                 catch
@@ -691,7 +697,7 @@ public sealed class DbExecutor : IDbExecutor
 
     #region Output parameter helpers
     // Extracts non-input parameters, skipping refcursors (handled as result sets) and normalizing via declared DbDataType.
-    private static IReadOnlyDictionary<string, TValue?>? ExtractOutputParameters<TValue>(
+    private static IReadOnlyDictionary<string, object?>? ExtractOutputParameters(
         DbCommand command,
         IReadOnlyList<DbParameter>? parameters)
     {
@@ -719,7 +725,7 @@ public sealed class DbExecutor : IDbExecutor
             }
         }
 
-        Dictionary<string, TValue?>? outputValues = null;
+        Dictionary<string, object?>? outputValues = null;
 
         foreach (System.Data.Common.DbParameter parameter in command.Parameters)
         {
@@ -733,20 +739,20 @@ public sealed class DbExecutor : IDbExecutor
             var hasDefinition = parameterLookup is not null && parameterLookup.TryGetValue(name, out definition);
 
             // Refcursor outputs are consumed separately as result sets; ignore their parameter values.
-            if (hasDefinition && definition!.DataType == DbDataType.RefCursor)
+            if (hasDefinition && definition != null && definition.DataType == DbDataType.RefCursor)
             {
                 continue;
             }
 
-            outputValues ??= new Dictionary<string, TValue?>(StringComparer.OrdinalIgnoreCase);
-            if (hasDefinition)
+            outputValues ??= new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            if (hasDefinition && definition != null)
             {
-                outputValues[name] = (TValue?)OutputParameterConverter.Normalize(parameter.Value, definition!.DataType);
+                outputValues[name] = OutputParameterConverter.Normalize(parameter.Value, definition.DataType);
             }
             else
             {
                 // No definition available; surface provider value (with DBNull → null) so callers still get the output.
-                outputValues[name] = parameter.Value is DBNull ? default : (TValue?)parameter.Value;
+                outputValues[name] = parameter.Value is DBNull ? null : parameter.Value;
             }
         }
 

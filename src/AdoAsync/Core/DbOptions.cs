@@ -10,14 +10,14 @@ public sealed record DbOptions
 {
     #region Members
     /// <summary>Target database provider.</summary>
-    public required DatabaseType DatabaseType { get; init; }
+    public DatabaseType DatabaseType { get; init; }
 
     /// <summary>Connection string for the chosen provider.</summary>
-    public required string ConnectionString { get; init; }
+    public string? ConnectionString { get; init; }
 
     /// <summary>Command timeout in seconds.</summary>
     // Shared default keeps behavior consistent across commands.
-    public required int CommandTimeoutSeconds { get; init; }
+    public int CommandTimeoutSeconds { get; init; }
 
     /// <summary>Enables diagnostics collection.</summary>
     public bool EnableDiagnostics { get; init; } = false;
