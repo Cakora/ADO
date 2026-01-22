@@ -10,8 +10,10 @@ public static class ValidationRunner
 {
     static ValidationRunner()
     {
-        // Default to English FluentValidation resources; callers can override globally if they register their own LanguageManager.
-        ValidatorOptions.Global.LanguageManager = new Validation.Localization.ResxLanguageManager();
+        #pragma warning disable S125 // keep stubbed configuration without sonar complaint
+        // Localization via ResxLanguageManager is intentionally disabled. Uncomment to re-enable:
+        // ValidatorOptions.Global.LanguageManager = new Validation.Localization.ResxLanguageManager();
+        #pragma warning restore S125
     }
     #region Public API
     /// <summary>Validates a value when enabled.</summary>

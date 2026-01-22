@@ -366,13 +366,13 @@ public sealed partial class DbExecutor : IDbExecutor
     }
 
     /// <summary>Materialize result sets into tables for callers that need DataTable/DataSet.</summary>
-    public async ValueTask<DbResult> QueryTablesAsync(CommandDefinition command, CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyList<DataTable>> QueryTablesAsync(CommandDefinition command, CancellationToken cancellationToken = default)
     {
         await EnsureNotDisposedAsync().ConfigureAwait(false);
         var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
-            return new DbResult { Success = false, Error = validationError };
+            throw new DbCallerException(validationError);
         }
 
         if (ShouldUseOracleRefCursorPath(command))
@@ -392,20 +392,25 @@ public sealed partial class DbExecutor : IDbExecutor
                 await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
                 var tables = await DataAdapterHelper.FillTablesAsync(dbCommand, ct).ConfigureAwait(false);
 
-                return new DbResult
+                var outputs = command.Parameters is { Count: > 0 }
+                    ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
+                    : null;
+
+                if (outputs is not null)
                 {
-                    Success = true,
-                    Tables = tables,
-                    OutputParameters = command.Parameters is { Count: > 0 }
-                        ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
-                        : null
-                };
+                    foreach (var table in tables)
+                    {
+                        table.ExtendedProperties["OutputParameters"] = outputs;
+                    }
+                }
+
+                return tables;
             }, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             var error = MapError(ex);
-            return new DbResult { Success = false, Error = error };
+            throw new DbCallerException(error, ex);
         }
     }
 
@@ -424,17 +429,8 @@ public sealed partial class DbExecutor : IDbExecutor
             CursorHelper.IsPostgresRefCursor(_options.DatabaseType, command))
         {
             // Reuse the multi-result buffered path so cursor handling stays consistent.
-            var multi = await QueryTablesAsync(command, cancellationToken).ConfigureAwait(false);
-            if (!multi.Success)
-            {
-                throw new DbCallerException(multi.Error ?? DbErrorMapper.Map(new DatabaseException(ErrorCategory.State, "QueryTableAsync failed.")));
-            }
-
-            var table = multi.Tables is { Count: > 0 } ? multi.Tables[0] : new DataTable();
-            if (multi.OutputParameters is not null)
-            {
-                table.ExtendedProperties["OutputParameters"] = multi.OutputParameters;
-            }
+            var tables = await QueryTablesAsync(command, cancellationToken).ConfigureAwait(false);
+            var table = tables is { Count: > 0 } ? tables[0] : new DataTable();
             return table;
         }
 

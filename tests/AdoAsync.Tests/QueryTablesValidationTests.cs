@@ -24,15 +24,14 @@ public class QueryTablesValidationTests
             EnableValidation = true
         });
 
-        var result = await executor.QueryTablesAsync(new CommandDefinition
+        var act = async () => await executor.QueryTablesAsync(new CommandDefinition
         {
             CommandText = string.Empty,
             CommandType = CommandType.Text
         });
 
-        result.Success.Should().BeFalse();
-        result.Error.Should().NotBeNull();
-        result.Error!.Type.Should().Be(DbErrorType.ValidationError);
+        await act.Should().ThrowAsync<DbCallerException>()
+            .Where(ex => ex.Error.Type == DbErrorType.ValidationError);
     }
 
     [Theory]
@@ -50,14 +49,13 @@ public class QueryTablesValidationTests
         });
 
         // Stored procedures require a parameter collection (even if empty).
-        var result = await executor.QueryTablesAsync(new CommandDefinition
+        var act = async () => await executor.QueryTablesAsync(new CommandDefinition
         {
             CommandText = "dbo.proc_name",
             CommandType = CommandType.StoredProcedure
         });
 
-        result.Success.Should().BeFalse();
-        result.Error.Should().NotBeNull();
-        result.Error!.Type.Should().Be(DbErrorType.ValidationError);
+        await act.Should().ThrowAsync<DbCallerException>()
+            .Where(ex => ex.Error.Type == DbErrorType.ValidationError);
     }
 }

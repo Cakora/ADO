@@ -19,10 +19,9 @@ public class QueryTablesIntegrationTests
     [InlineData(DatabaseType.Oracle, "select 1 as Id from dual")]
     public async Task SingleSelect_ReturnsTable(DatabaseType databaseType, string sql)
     {
-        var result = await ExecuteQueryTablesAsync(databaseType, sql, CommandType.Text);
-        Assert.True(result.Success);
-        Assert.NotNull(result.Tables);
-        Assert.NotEmpty(result.Tables);
+        var tables = await ExecuteQueryTablesAsync(databaseType, sql, CommandType.Text);
+        Assert.NotNull(tables);
+        Assert.NotEmpty(tables);
     }
 
     [Theory(Skip = SkipMessage)]
@@ -53,10 +52,9 @@ public class QueryTablesIntegrationTests
     [InlineData(DatabaseType.Oracle, "PKG_TEST.GET_SINGLE_RESULT")]
     public async Task StoredProcedure_ReturnsTable(DatabaseType databaseType, string procedureName)
     {
-        var result = await ExecuteQueryTablesAsync(databaseType, procedureName, CommandType.StoredProcedure);
-        Assert.True(result.Success);
-        Assert.NotNull(result.Tables);
-        Assert.NotEmpty(result.Tables);
+        var tables = await ExecuteQueryTablesAsync(databaseType, procedureName, CommandType.StoredProcedure);
+        Assert.NotNull(tables);
+        Assert.NotEmpty(tables);
     }
 
     [Theory(Skip = SkipMessage)]
@@ -88,7 +86,7 @@ public class QueryTablesIntegrationTests
     [InlineData(DatabaseType.Oracle, "PKG_CUSTOMER.GET_CUSTOMER_STATS")]
     public async Task StoredProcedure_OutputParameters_Returned(DatabaseType databaseType, string procedureName)
     {
-        var result = await ExecuteQueryTablesAsync(databaseType, procedureName, CommandType.StoredProcedure, new[]
+        var tables = await ExecuteQueryTablesAsync(databaseType, procedureName, CommandType.StoredProcedure, new[]
         {
             new DbParameter
             {
@@ -106,8 +104,9 @@ public class QueryTablesIntegrationTests
             }
         });
 
-        Assert.True(result.Success);
-        Assert.NotNull(result.OutputParameters);
+        Assert.NotNull(tables);
+        Assert.NotEmpty(tables);
+        Assert.True(tables[0].ExtendedProperties.Contains("OutputParameters"));
     }
 
     [Theory(Skip = SkipMessage)]
@@ -116,10 +115,9 @@ public class QueryTablesIntegrationTests
     [InlineData(DatabaseType.Oracle, "PKG_TEST.GET_MULTI_RESULT")]
     public async Task StoredProcedure_MultiResult_ReturnsTables(DatabaseType databaseType, string procedureName)
     {
-        var result = await ExecuteQueryTablesAsync(databaseType, procedureName, CommandType.StoredProcedure);
-        Assert.True(result.Success);
-        Assert.NotNull(result.Tables);
-        Assert.True(result.Tables!.Count >= 2);
+        var tables = await ExecuteQueryTablesAsync(databaseType, procedureName, CommandType.StoredProcedure);
+        Assert.NotNull(tables);
+        Assert.True(tables!.Count >= 2);
     }
 
     [Theory(Skip = SkipMessage)]
@@ -128,12 +126,9 @@ public class QueryTablesIntegrationTests
     [InlineData(DatabaseType.Oracle, "PKG_TEST.GET_MULTI_RESULT")]
     public async Task StoredProcedure_MultiResult_DataSet(DatabaseType databaseType, string procedureName)
     {
-        var result = await ExecuteQueryTablesAsync(databaseType, procedureName, CommandType.StoredProcedure);
-        Assert.True(result.Success);
-        Assert.NotNull(result.Tables);
-
+        var tables = await ExecuteQueryTablesAsync(databaseType, procedureName, CommandType.StoredProcedure);
         var dataSet = new DataSet();
-        foreach (var table in result.Tables!)
+        foreach (var table in tables!)
         {
             dataSet.Tables.Add(table);
         }
@@ -150,7 +145,7 @@ public class QueryTablesIntegrationTests
             EnableValidation = true
         });
 
-    private static ValueTask<DbResult> ExecuteQueryTablesAsync(
+    private static ValueTask<IReadOnlyList<DataTable>> ExecuteQueryTablesAsync(
         DatabaseType databaseType,
         string commandText,
         CommandType commandType,

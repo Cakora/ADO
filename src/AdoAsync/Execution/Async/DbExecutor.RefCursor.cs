@@ -63,7 +63,7 @@ public sealed partial class DbExecutor
         }
     }
 
-    private async ValueTask<DbResult> ExecuteOracleRefCursorsAsync(CommandDefinition command, CancellationToken cancellationToken)
+    private async ValueTask<IReadOnlyList<DataTable>> ExecuteOracleRefCursorsAsync(CommandDefinition command, CancellationToken cancellationToken)
     {
         try
         {
@@ -73,24 +73,29 @@ public sealed partial class DbExecutor
                 await dbCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
                 var tables = OracleProvider.ReadRefCursorResults(dbCommand);
-                return new DbResult
+                var outputs = command.Parameters is { Count: > 0 }
+                    ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
+                    : null;
+
+                if (outputs is not null)
                 {
-                    Success = true,
-                    Tables = tables,
-                    OutputParameters = command.Parameters is { Count: > 0 }
-                        ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
-                        : null
-                };
+                    foreach (var table in tables)
+                    {
+                        table.ExtendedProperties["OutputParameters"] = outputs;
+                    }
+                }
+
+                return tables;
             }, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             var error = MapError(ex);
-            return new DbResult { Success = false, Error = error };
+            throw new DbCallerException(error, ex);
         }
     }
 
-    private async ValueTask<DbResult> ExecutePostgresRefCursorsAsync(CommandDefinition command, CancellationToken cancellationToken)
+    private async ValueTask<IReadOnlyList<DataTable>> ExecutePostgresRefCursorsAsync(CommandDefinition command, CancellationToken cancellationToken)
     {
         try
         {
@@ -116,14 +121,19 @@ public sealed partial class DbExecutor
                         await transaction.CommitAsync(ct).ConfigureAwait(false);
                     }
 
-                    return new DbResult
+                    var outputs = command.Parameters is { Count: > 0 }
+                        ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
+                        : null;
+
+                    if (outputs is not null)
                     {
-                        Success = true,
-                        Tables = tables,
-                        OutputParameters = command.Parameters is { Count: > 0 }
-                            ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
-                            : null
-                    };
+                        foreach (var table in tables)
+                        {
+                            table.ExtendedProperties["OutputParameters"] = outputs;
+                        }
+                    }
+
+                    return tables;
                 }
                 catch
                 {
@@ -138,7 +148,7 @@ public sealed partial class DbExecutor
         catch (Exception ex)
         {
             var error = MapError(ex);
-            return new DbResult { Success = false, Error = error };
+            throw new DbCallerException(error, ex);
         }
     }
     #endregion

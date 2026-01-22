@@ -12,7 +12,7 @@ Async-first ADO.NET helper that keeps provider logic contained for SQL Server, P
 - Explicit bulk import with column mapping (provider-owned implementations).
 
 ## Errors and Exceptions
-- Prefer `DbResult.Error` where available (no thrown provider exceptions).
+- Prefer catching `DbCallerException` and reading `DbCallerException.Error` (no thrown provider exceptions leak).
 - When exceptions are thrown, catch `DbCallerException` only (single caller-facing type) and read `DbCallerException.Error`.
 - `DbClientException` exists only as a legacy name; prefer `DbCallerException`.
 - Error fields: `Type`/`Code` (category + stable code), `MessageKey`/`MessageParameters` (localization), `IsTransient` (safe to retry/backoff), `ProviderDetails` (sanitized diagnostics). `IsTransient` only influences retry when `DbOptions.EnableRetry` is true (default is off), so marking an error transient does not force retries unless you opt in.
@@ -164,13 +164,13 @@ Easy, but buffers all rows (materialized):
 using System.Data;
 using System.Linq;
 
-var result = await executor.QueryTablesAsync(new CommandDefinition
+var tables = await executor.QueryTablesAsync(new CommandDefinition
 {
     CommandText = "select Id, Name from dbo.Customers",
     CommandType = CommandType.Text
 });
 
-var table = result.Tables![0];
+var table = tables[0];
 foreach (DataRow row in table.Rows)
 {
     var id = (long)row["Id"];
@@ -218,13 +218,13 @@ await tx.CommitAsync();
 ## Result Shapes (Single + Multi-Result)
 Single SELECT or stored procedure -> `QueryTablesAsync` returns one `DataTable`:
 ```csharp
-var result = await executor.QueryTablesAsync(new CommandDefinition
+var tables = await executor.QueryTablesAsync(new CommandDefinition
 {
     CommandText = "select Id, Name from dbo.Customers",
     CommandType = CommandType.Text
 });
 
-var table = result.Tables![0];
+var table = tables[0];
 ```
 
 ## Multi-Result (All Providers)
@@ -233,7 +233,7 @@ var table = result.Tables![0];
 ### SQL Server (multiple result sets)
 SQL Server can return multiple result sets from a stored procedure (or multiple `SELECT` statements in one batch):
 ```csharp
-var result = await executor.QueryTablesAsync(new CommandDefinition
+var tables = await executor.QueryTablesAsync(new CommandDefinition
 {
     CommandText = "dbo.GetCustomerAndOrders",
     CommandType = CommandType.StoredProcedure,
@@ -243,14 +243,14 @@ var result = await executor.QueryTablesAsync(new CommandDefinition
     }
 });
 
-var customerTable = result.Tables![0];
-var ordersTable = result.Tables![1];
+var customerTable = tables[0];
+var ordersTable = tables[1];
 ```
 
 ### PostgreSQL (refcursor outputs)
 PostgreSQL stored procedures can return multiple refcursors via output parameters:
 ```csharp
-var result = await executor.QueryTablesAsync(new CommandDefinition
+var tables = await executor.QueryTablesAsync(new CommandDefinition
 {
     CommandText = "public.get_customer_and_orders",
     CommandType = CommandType.StoredProcedure,
@@ -262,8 +262,8 @@ var result = await executor.QueryTablesAsync(new CommandDefinition
     }
 });
 
-var customerTable = result.Tables![0];
-var ordersTable = result.Tables![1];
+var customerTable = tables[0];
+var ordersTable = tables[1];
 ```
 
 Typed mapping (single cursor) is supported via `QueryAsync<T>`:
@@ -288,7 +288,7 @@ For multi-cursor PostgreSQL procedures, prefer `QueryTablesAsync` and map from `
 ### Oracle (RefCursor outputs)
 Oracle returns multi-result sets via `RefCursor` output parameters:
 ```csharp
-var result = await executor.QueryTablesAsync(new CommandDefinition
+var tables = await executor.QueryTablesAsync(new CommandDefinition
 {
     CommandText = "PKG_CUSTOMER.GET_CUSTOMER_AND_ORDERS",
     CommandType = CommandType.StoredProcedure,
@@ -300,8 +300,8 @@ var result = await executor.QueryTablesAsync(new CommandDefinition
     }
 });
 
-var customerTable = result.Tables![0];
-var ordersTable = result.Tables![1];
+var customerTable = tables[0];
+var ordersTable = tables[1];
 ```
 
 Typed mapping (single cursor) is supported via `QueryAsync<T>`:
@@ -325,7 +325,7 @@ For multi-cursor Oracle procedures, prefer `QueryTablesAsync` and map from `Data
 
 Multi-result stored procedure -> `QueryTablesAsync` returns multiple tables:
 ```csharp
-var result = await executor.QueryTablesAsync(new CommandDefinition
+var tables = await executor.QueryTablesAsync(new CommandDefinition
 {
     CommandText = "dbo.GetCustomerAndOrders",
     CommandType = CommandType.StoredProcedure,
@@ -341,14 +341,14 @@ var result = await executor.QueryTablesAsync(new CommandDefinition
     }
 });
 
-var customerTable = result.Tables![0];
-var ordersTable = result.Tables![1];
+var customerTable = tables[0];
+var ordersTable = tables[1];
 ```
 
 Multi-result -> DataSet:
 ```csharp
 var dataSet = new DataSet();
-foreach (var table in result.Tables!)
+foreach (var table in tables)
 {
     dataSet.Tables.Add(table);
 }
@@ -374,7 +374,7 @@ await foreach (var customer in executor.QueryAsync(new CommandDefinition
 
 Custom class mapping from DataTable (multi-result example):
 ```csharp
-var customers = result.Tables![0]
+var customers = tables[0]
     .AsEnumerable()
     .Select(row => new Customer
     {
