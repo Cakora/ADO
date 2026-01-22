@@ -312,6 +312,24 @@ public class ValidationTests
         result.IsValid.Should().BeTrue();
     }
 
+
+    [Fact]
+    public void CommandDefinitionValidator_RejectsUnvalidatedIdentifier()
+    {
+        var validator = new CommandDefinitionValidator();
+        var definition = new CommandDefinition
+        {
+            CommandText = "select * from " + "users; drop table users;--",
+            IdentifiersToValidate = new[] { "users; drop table users;--" },
+            AllowedIdentifiers = new HashSet<string> { "safe_table" }
+        };
+
+        var result = validator.Validate(definition);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("allowed list"));
+    }
+
     [Fact]
     public void CommandDefinitionValidator_ValidatesIdentifiersAgainstAllowList()
     {
@@ -342,7 +360,7 @@ public class ValidationTests
         var result = validator.Validate(request);
 
         result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("allow-list"));
+        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("allowed list"));
     }
 
     [Fact]

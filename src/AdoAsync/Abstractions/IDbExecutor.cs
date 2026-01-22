@@ -13,28 +13,26 @@ namespace AdoAsync.Abstractions;
 public interface IDbExecutor : IAsyncDisposable
 {
     #region Members
-    /// <summary>Executes a single SELECT and returns a streaming reader (SQL Server/PostgreSQL only; caller owns reader lifecycle).</summary>
+    /// <summary>Executes a single SELECT and returns a streaming reader (SQL Server/PostgreSQL only; caller owns reader lifecycle). Output parameters are not available on this streaming path.</summary>
     ValueTask<DbDataReader> ExecuteReaderAsync(CommandDefinition command, CancellationToken cancellationToken = default);
 
-    /// <summary>Streams records from a single SELECT via ReadAsync (SQL Server/PostgreSQL only).</summary>
+    /// <summary>Executes a single SELECT and returns a streaming reader plus deferred output parameters (SQL Server/PostgreSQL only).</summary>
+    ValueTask<StreamingReaderResult> ExecuteReaderWithOutputsAsync(CommandDefinition command, CancellationToken cancellationToken = default);
+
+    /// <summary>Streams records from a single SELECT via ReadAsync (SQL Server/PostgreSQL only). Output parameters are not available on this streaming path.</summary>
     IAsyncEnumerable<IDataRecord> StreamAsync(CommandDefinition command, CancellationToken cancellationToken = default);
 
-    /// <summary>Executes a scalar command and returns the value converted to <typeparamref name="T"/>.</summary>
+    /// <summary>Executes a scalar command and returns the value converted to <typeparamref name="T"/> (all providers). Output parameters are not returned on this scalar path.</summary>
     ValueTask<T> ExecuteScalarAsync<T>(CommandDefinition command, CancellationToken cancellationToken = default);
 
-    /// <summary>Executes a single result and returns a buffered <see cref="DataTable"/> via provider DataAdapter.</summary>
+    /// <summary>Executes a single result and returns a buffered <see cref="DataTable"/> via provider DataAdapter (SQL Server/PostgreSQL/Oracle). Output parameters, when present, are attached to DataTable.ExtendedProperties["OutputParameters"].</summary>
     ValueTask<DataTable> QueryTableAsync(CommandDefinition command, CancellationToken cancellationToken = default);
 
-    /// <summary>Executes a single result and returns a buffered, mapped list from the resulting DataTable.</summary>
+    /// <summary>Executes a single result and returns a buffered, mapped list from the resulting DataTable. Output parameters are available on the underlying DataTable ExtendedProperties.</summary>
     ValueTask<List<T>> QueryAsync<T>(CommandDefinition command, Func<DataRow, T> map, CancellationToken cancellationToken = default);
 
-    /// <summary>Executes multiple SELECT statements or cursor results and returns buffered tables (includes output parameters).</summary>
-    ValueTask<DbResult> QueryTablesAsync(CommandDefinition command, CancellationToken cancellationToken = default);
-
-    /// <summary>Executes multiple SELECT statements or cursor results and returns a <see cref="DataSet"/> via provider DataAdapter.</summary>
+    /// <summary>Executes multiple SELECT statements or cursor results and returns a <see cref="DataSet"/> via provider DataAdapter (SQL Server multi-SELECT, PostgreSQL refcursor/multi-SELECT, Oracle refcursor). Output parameters, when present, are attached to DataSet.ExtendedProperties["OutputParameters"].</summary>
     ValueTask<DataSet> ExecuteDataSetAsync(CommandDefinition command, CancellationToken cancellationToken = default);
 
-    /// <summary>Executes multiple SELECT statements or cursor results and returns a structured multi-result (DataSet + output parameters).</summary>
-    ValueTask<MultiResult> QueryMultipleAsync(CommandDefinition command, CancellationToken cancellationToken = default);
     #endregion
 }

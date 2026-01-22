@@ -8,6 +8,11 @@ namespace AdoAsync.Validation;
 /// </summary>
 public static class ValidationRunner
 {
+    static ValidationRunner()
+    {
+        // Default to English FluentValidation resources; callers can override globally if they register their own LanguageManager.
+        ValidatorOptions.Global.LanguageManager = new Validation.Localization.ResxLanguageManager();
+    }
     #region Public API
     /// <summary>Validates a value when enabled.</summary>
     public static DbError? Validate<T>(T value, bool enableValidation, IValidator<T> validator)

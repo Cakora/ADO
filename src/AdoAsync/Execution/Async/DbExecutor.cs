@@ -26,6 +26,7 @@ namespace AdoAsync.Execution;
 public sealed partial class DbExecutor : IDbExecutor
 {
     #region Fields
+    private const string OutputsNotSupportedMessage = "Output parameters are not returned on this path. Use a buffered method instead.";
     private readonly DbOptions _options;
     private readonly IDbProvider _provider;
     private readonly IAsyncPolicy _retryPolicy;
@@ -98,11 +99,44 @@ public sealed partial class DbExecutor : IDbExecutor
         {
             throw new DbCallerException(validationError);
         }
+        ThrowIfOutputsNotSupported(command);
 
         try
         {
             var dbCommand = await CreateCommandAsync(command, cancellationToken).ConfigureAwait(false);
             return await dbCommand.ExecuteReaderAsync(command.Behavior, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            throw WrapException(ex);
+        }
+    }
+
+    /// <summary>Execute a single SELECT and return a streaming reader with deferred output parameters (SQL Server/PostgreSQL only).</summary>
+    public async ValueTask<StreamingReaderResult> ExecuteReaderWithOutputsAsync(CommandDefinition command, CancellationToken cancellationToken = default)
+    {
+        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        var validationError = ValidateCommandDefinition(command);
+        if (validationError is not null)
+        {
+            throw new DbCallerException(validationError);
+        }
+
+        if (_options.DatabaseType == DatabaseType.Oracle)
+        {
+            throw new DbCallerException(DbErrorMapper.Map(new DatabaseException(ErrorCategory.Unsupported, "Oracle does not support streaming outputs. Use buffered materialization instead.")));
+        }
+
+        if (CursorHelper.IsPostgresRefCursor(_options.DatabaseType, command))
+        {
+            throw new DbCallerException(DbErrorMapper.Map(new DatabaseException(ErrorCategory.Unsupported, "PostgreSQL refcursor requires buffered materialization (QueryTableAsync/ExecuteDataSetAsync).")));
+        }
+
+        try
+        {
+            var dbCommand = await CreateCommandAsync(command, cancellationToken).ConfigureAwait(false);
+            var reader = await dbCommand.ExecuteReaderAsync(command.Behavior, cancellationToken).ConfigureAwait(false);
+            return new StreamingReaderResult(dbCommand, reader, command.Parameters);
         }
         catch (Exception ex)
         {
@@ -159,6 +193,7 @@ public sealed partial class DbExecutor : IDbExecutor
         {
             throw new DbCallerException(validationError);
         }
+        ThrowIfOutputsNotSupported(command);
 
         try
         {
@@ -395,7 +430,12 @@ public sealed partial class DbExecutor : IDbExecutor
                 throw new DbCallerException(multi.Error ?? DbErrorMapper.Map(new DatabaseException(ErrorCategory.State, "QueryTableAsync failed.")));
             }
 
-            return multi.Tables is { Count: > 0 } ? multi.Tables[0] : new DataTable();
+            var table = multi.Tables is { Count: > 0 } ? multi.Tables[0] : new DataTable();
+            if (multi.OutputParameters is not null)
+            {
+                table.ExtendedProperties["OutputParameters"] = multi.OutputParameters;
+            }
+            return table;
         }
 
         try
@@ -404,6 +444,13 @@ public sealed partial class DbExecutor : IDbExecutor
             {
                 await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
                 var table = await DataAdapterHelper.FillTableAsync(dbCommand, ct).ConfigureAwait(false);
+                var outputs = command.Parameters is { Count: > 0 }
+                    ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
+                    : null;
+                if (outputs is not null)
+                {
+                    table.ExtendedProperties["OutputParameters"] = outputs;
+                }
                 return table;
             }, cancellationToken).ConfigureAwait(false);
         }
@@ -423,15 +470,14 @@ public sealed partial class DbExecutor : IDbExecutor
             throw new DbCallerException(validationError);
         }
 
-        var (dataSet, _) = await ExecuteDataSetInternalAsync(command, cancellationToken).ConfigureAwait(false);
-        return dataSet;
-    }
-
-    /// <summary>Buffered multi-result as MultiResult.</summary>
-    public async ValueTask<MultiResult> QueryMultipleAsync(CommandDefinition command, CancellationToken cancellationToken = default)
-    {
         var (dataSet, outputs) = await ExecuteDataSetInternalAsync(command, cancellationToken).ConfigureAwait(false);
-        return dataSet.ToMultiResult(outputs);
+        if (outputs is not null)
+        {
+            // Surface output parameters without altering the return type.
+            dataSet.ExtendedProperties["OutputParameters"] = outputs;
+        }
+
+        return dataSet;
     }
 
     /// <summary>Bulk import data using provider-specific fast paths.</summary>
@@ -647,6 +693,22 @@ public sealed partial class DbExecutor : IDbExecutor
         await Task.CompletedTask;
     }
 
+    private static void ThrowIfOutputsNotSupported(CommandDefinition command)
+    {
+        if (command.Parameters is null || command.Parameters.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var parameter in command.Parameters)
+        {
+            if (parameter.Direction != ParameterDirection.Input)
+            {
+                throw new DbCallerException(DbErrorMapper.Map(new DatabaseException(ErrorCategory.Unsupported, OutputsNotSupportedMessage)));
+            }
+        }
+    }
+
     private Task<T> ExecuteWithRetryIfAllowedAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
     {
         // Never retry inside an explicit user transaction; keep at-most-once semantics.
@@ -705,7 +767,7 @@ public sealed partial class DbExecutor : IDbExecutor
             return callerException.Error;
         }
 
-        return MapProviderError(_options.DatabaseType, exception);
+        return Exceptions.ExceptionHandler.Map(_options.DatabaseType, exception);
     }
 
     private async ValueTask<(DataSet DataSet, IReadOnlyDictionary<string, object?>? OutputParameters)> ExecuteDataSetInternalAsync(
