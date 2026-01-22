@@ -43,7 +43,7 @@ internal static class ParameterHelper
                 continue;
             }
 
-            outputValues ??= new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            outputValues ??= new Dictionary<string, object?>(command.Parameters.Count, StringComparer.OrdinalIgnoreCase);
             if (hasDefinition && definition != null)
             {
                 outputValues[name] = OutputParameterConverter.Normalize(parameter.Value, definition.DataType);

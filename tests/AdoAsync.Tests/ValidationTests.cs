@@ -30,6 +30,59 @@ public class ValidationTests
     }
 
     [Fact]
+    public void DbParameterValidator_AllowsSizedOutputString()
+    {
+        var validator = new DbParameterValidator();
+        var parameter = new DbParameter
+        {
+            Name = "p",
+            DataType = DbDataType.String,
+            Value = null,
+            Direction = ParameterDirection.Output,
+            Size = 100
+        };
+
+        var result = validator.Validate(parameter);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DbParameterValidator_AllowsDecimalWithPrecisionAndScale()
+    {
+        var validator = new DbParameterValidator();
+        var parameter = new DbParameter
+        {
+            Name = "p",
+            DataType = DbDataType.Decimal,
+            Value = 1.23m,
+            Direction = ParameterDirection.Input,
+            Precision = 18,
+            Scale = 2
+        };
+
+        var result = validator.Validate(parameter);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DbParameterValidator_AllowsRefCursorOutput()
+    {
+        var validator = new DbParameterValidator();
+        var parameter = new DbParameter
+        {
+            Name = "p_cursor",
+            DataType = DbDataType.RefCursor,
+            Direction = ParameterDirection.Output
+        };
+
+        var result = validator.Validate(parameter);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
     public void DbParameterValidator_RejectsInvalidDirection()
     {
         var validator = new DbParameterValidator();

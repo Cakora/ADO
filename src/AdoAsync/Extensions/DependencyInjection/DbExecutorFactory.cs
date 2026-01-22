@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Frozen;
 using AdoAsync.Abstractions;
 using AdoAsync.Execution;
 
@@ -28,7 +29,7 @@ internal sealed class DbExecutorFactory : IDbExecutorFactory
             map.Add(key, entry.Options);
         }
 
-        _optionsByName = map;
+        _optionsByName = map.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
     }
 
     public IDbExecutor Create(string name, bool isInUserTransaction = false)

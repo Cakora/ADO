@@ -28,6 +28,9 @@ public interface IDbExecutor : IAsyncDisposable
     /// <summary>Executes a single result and returns a buffered, mapped list from the resulting DataTable.</summary>
     ValueTask<List<T>> QueryAsync<T>(CommandDefinition command, Func<DataRow, T> map, CancellationToken cancellationToken = default);
 
+    /// <summary>Executes multiple SELECT statements or cursor results and returns buffered tables (includes output parameters).</summary>
+    ValueTask<DbResult> QueryTablesAsync(CommandDefinition command, CancellationToken cancellationToken = default);
+
     /// <summary>Executes multiple SELECT statements or cursor results and returns a <see cref="DataSet"/> via provider DataAdapter.</summary>
     ValueTask<DataSet> ExecuteDataSetAsync(CommandDefinition command, CancellationToken cancellationToken = default);
 

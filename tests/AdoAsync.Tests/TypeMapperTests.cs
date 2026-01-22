@@ -52,5 +52,21 @@ public class TypeMapperTests
         act.Should().Throw<DatabaseException>()
             .Where(ex => ex.Kind == ErrorCategory.Unsupported);
     }
+
+    [Fact]
+    public void PostgreSqlTypeMapper_ThrowsOnUnsupportedType()
+    {
+        var act = () => PostgreSqlTypeMapper.Map((DbDataType)999);
+        act.Should().Throw<DatabaseException>()
+            .Where(ex => ex.Kind == ErrorCategory.Unsupported);
+    }
+
+    [Fact]
+    public void OracleTypeMapper_ThrowsOnUnsupportedType()
+    {
+        var act = () => OracleTypeMapper.Map((DbDataType)999);
+        act.Should().Throw<DatabaseException>()
+            .Where(ex => ex.Kind == ErrorCategory.Unsupported);
+    }
     #endregion
 }
