@@ -1,7 +1,7 @@
 # Changes 1.2
 
 ## Added
-- src/AdoAsync/Core/StreamingReaderResult.cs:1-77
+- src/AdoAsync/Abstractions/StreamingReaderResult.cs:1-77
 - src/AdoAsync/Exceptions/ExceptionHandler.cs:1-24
 - src/AdoAsync/Extensions/Execution/DataTableOutputExtensions.cs:1-28
 - src/AdoAsync/Extensions/Execution/DataSetOutputExtensions.cs:1-28
