@@ -273,12 +273,10 @@ public sealed partial class DbExecutor : IDbExecutor
                     ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
                     : null;
 
-                if (outputs is not null)
+                if (outputs is not null && tables.Count > 0)
                 {
-                    foreach (var table in tables)
-                    {
-                        table.ExtendedProperties["OutputParameters"] = outputs;
-                    }
+                    // Attach once; outputs are identical for all result sets.
+                    tables[0].ExtendedProperties["OutputParameters"] = outputs;
                 }
 
                 return tables;

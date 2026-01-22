@@ -22,15 +22,34 @@ public sealed partial class DbExecutor
     #endregion
 
     #region Refcursor transaction helpers
-    /// <summary>
-    /// For refcursor scenarios: reuse the caller's transaction when present; otherwise start a short-lived transaction.
-    /// </summary>
-    private async ValueTask<DbTransaction?> GetRefCursorTransactionAsync(CancellationToken cancellationToken)
+    private async ValueTask<T> WithTransactionScopeAsync<T>(CancellationToken cancellationToken, Func<DbTransaction, Task<T>> action)
     {
+        // Refcursors must be consumed within a transaction scope (reuse caller transaction when present).
         await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
-        return _activeTransaction is null
+
+        await using var transaction = _activeTransaction is null
             ? await _connection!.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
             : null;
+        var startedTransaction = transaction is not null;
+        var effectiveTransaction = transaction ?? _activeTransaction!;
+
+        try
+        {
+            var result = await action(effectiveTransaction).ConfigureAwait(false);
+            if (startedTransaction)
+            {
+                await transaction!.CommitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            return result;
+        }
+        catch
+        {
+            if (startedTransaction)
+            {
+                await transaction!.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            }
+            throw;
+        }
     }
     #endregion
 
@@ -49,13 +68,7 @@ public sealed partial class DbExecutor
                     ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
                     : null;
 
-                if (outputs is not null)
-                {
-                    foreach (var table in tables)
-                    {
-                        table.ExtendedProperties["OutputParameters"] = outputs;
-                    }
-                }
+                AttachOutputsToFirstTable(tables, outputs);
 
                 return tables;
             }, cancellationToken).ConfigureAwait(false);
@@ -73,48 +86,26 @@ public sealed partial class DbExecutor
         {
             return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
-                // Refcursor fetches require a transaction scope in PostgreSQL; start one only when the caller has not.
-                await using var transaction = await GetRefCursorTransactionAsync(ct).ConfigureAwait(false);
-                await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
-                if (transaction is not null)
+                // Ensure we have a transaction for opening + fetching refcursors.
+                return await WithTransactionScopeAsync(ct, async effectiveTransaction =>
                 {
-                    dbCommand.Transaction = transaction;
-                }
-                try
-                {
+                    await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
+                    dbCommand.Transaction = effectiveTransaction;
+
                     await dbCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
                     var tables = await PostgreSqlProvider
-                        .ReadRefCursorResultsAsync(dbCommand, _connection!, transaction ?? _activeTransaction!, ct)
+                        .ReadRefCursorResultsAsync(dbCommand, _connection!, effectiveTransaction, ct)
                         .ConfigureAwait(false);
-
-                    if (transaction is not null)
-                    {
-                        await transaction.CommitAsync(ct).ConfigureAwait(false);
-                    }
 
                     var outputs = command.Parameters is { Count: > 0 }
                         ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
                         : null;
 
-                    if (outputs is not null)
-                    {
-                        foreach (var table in tables)
-                        {
-                            table.ExtendedProperties["OutputParameters"] = outputs;
-                        }
-                    }
+                    AttachOutputsToFirstTable(tables, outputs);
 
                     return tables;
-                }
-                catch
-                {
-                    if (transaction is not null)
-                    {
-                        await transaction.RollbackAsync(ct).ConfigureAwait(false);
-                    }
-                    throw;
-                }
+                }).ConfigureAwait(false);
             }, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -122,6 +113,17 @@ public sealed partial class DbExecutor
             var error = MapError(ex);
             throw new DbCallerException(error, ex);
         }
+    }
+
+    private static void AttachOutputsToFirstTable(IReadOnlyList<DataTable> tables, IReadOnlyDictionary<string, object?>? outputs)
+    {
+        if (outputs is null || tables.Count == 0)
+        {
+            return;
+        }
+
+        // Attach once; outputs are identical for all result sets.
+        tables[0].ExtendedProperties["OutputParameters"] = outputs;
     }
     #endregion
 }
