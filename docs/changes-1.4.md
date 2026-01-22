@@ -6,7 +6,7 @@
 
 ## Updated
 - src/AdoAsync/Execution/Async/DbExecutor.cs:276-279
-- src/AdoAsync/Execution/Async/DbExecutor.RefCursor.cs:25-127
+- src/AdoAsync/Execution/Async/DbExecutor.RefCursor.cs:25-127 (WithTransactionScopeAsync, ExecutePostgresRefCursorsAsync)
 
 ## Moved
 - (none)
