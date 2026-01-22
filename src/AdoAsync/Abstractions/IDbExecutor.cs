@@ -25,6 +25,13 @@ public interface IDbExecutor : IAsyncDisposable
     /// <summary>Executes a scalar command and returns the value converted to <typeparamref name="T"/> (all providers). Output parameters are not returned on this scalar path.</summary>
     ValueTask<T> ExecuteScalarAsync<T>(CommandDefinition command, CancellationToken cancellationToken = default);
 
+    /// <summary>Executes a non-query command (INSERT/UPDATE/DELETE) and returns the affected row count (all providers).</summary>
+    /// <remarks>
+    /// Use this for commands where the database returns rows-affected via ExecuteNonQuery.
+    /// Output parameters are supported on this buffered path and are available on the executed command.
+    /// </remarks>
+    ValueTask<int> ExecuteAsync(CommandDefinition command, CancellationToken cancellationToken = default);
+
     /// <summary>Executes a single result and returns a buffered <see cref="DataTable"/> via provider DataAdapter (SQL Server/PostgreSQL/Oracle). Output parameters, when present, are attached to DataTable.ExtendedProperties["OutputParameters"].</summary>
     ValueTask<DataTable> QueryTableAsync(CommandDefinition command, CancellationToken cancellationToken = default);
 

@@ -35,34 +35,6 @@ public sealed partial class DbExecutor
     #endregion
 
     #region Refcursor execution
-    private async IAsyncEnumerable<(int SetIndex, T Item)> StreamOracleRefCursors<T>(
-        CommandDefinition command,
-        Func<IDataRecord, T>[] mappers,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        await using var dbCommand = await CreateCommandAsync(command, cancellationToken).ConfigureAwait(false);
-        await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-
-        var cursors = OracleProvider.ReadRefCursorResults(dbCommand);
-        if (cursors.Count > mappers.Length)
-        {
-            throw new DatabaseException(ErrorCategory.Unsupported, "Additional result sets exist without corresponding mappers.");
-        }
-
-        var setIndex = 0;
-        foreach (var table in cursors)
-        {
-            var map = mappers[setIndex] ?? throw new ArgumentNullException($"mappers[{setIndex}]");
-            using var reader = table.CreateDataReader();
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                yield return (setIndex, map(reader));
-            }
-            setIndex++;
-        }
-    }
-
     private async ValueTask<IReadOnlyList<DataTable>> ExecuteOracleRefCursorsAsync(CommandDefinition command, CancellationToken cancellationToken)
     {
         try
