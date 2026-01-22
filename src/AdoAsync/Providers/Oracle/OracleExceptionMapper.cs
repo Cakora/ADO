@@ -17,7 +17,7 @@ public static class OracleExceptionMapper
             return DbErrorMapper.Map(exception);
         }
 
-        return ErrorRuleMatcher.Map(oraEx, Rules, DbErrorMapper.Unknown);
+        return ErrorRuleMatcher.Map(oraEx, Rules, ex => DbErrorMapper.Map(ex));
     }
     #endregion
 

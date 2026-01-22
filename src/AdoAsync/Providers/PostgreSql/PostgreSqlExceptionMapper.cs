@@ -17,7 +17,7 @@ public static class PostgreSqlExceptionMapper
             return DbErrorMapper.Map(exception);
         }
 
-        return ErrorRuleMatcher.Map(pgEx, Rules, DbErrorMapper.Unknown);
+        return ErrorRuleMatcher.Map(pgEx, Rules, ex => DbErrorMapper.Map(ex));
     }
     #endregion
 

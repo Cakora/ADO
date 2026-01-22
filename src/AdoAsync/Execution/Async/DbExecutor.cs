@@ -10,9 +10,8 @@ using System.Threading.Tasks;
 using AdoAsync.Abstractions;
 using AdoAsync.BulkCopy.LinqToDb.Common;
 using AdoAsync.BulkCopy.LinqToDb.Typed;
-using AdoAsync.Providers.Oracle;
-using AdoAsync.Providers.PostgreSql;
-using AdoAsync.Providers.SqlServer;
+using AdoAsync.Extensions.Execution;
+using AdoAsync.Helpers;
 using AdoAsync.Resilience;
 using AdoAsync.Transactions;
 using AdoAsync.Validation;
@@ -24,7 +23,7 @@ namespace AdoAsync.Execution;
 /// <summary>
 /// Orchestrates validation → resilience → provider → ADO.NET. Not thread-safe. Streaming by default; materialization is explicit and allocation-heavy. Retries are Polly-based and opt-in; cancellation is honored on all async calls; transactions are explicit via the transaction manager.
 /// </summary>
-public sealed class DbExecutor : IDbExecutor
+public sealed partial class DbExecutor : IDbExecutor
 {
     #region Fields
     private readonly DbOptions _options;
@@ -90,6 +89,43 @@ public sealed class DbExecutor : IDbExecutor
     #endregion
 
     #region Public API
+    /// <summary>Execute a single SELECT and return a streaming reader.</summary>
+    public async ValueTask<DbDataReader> ExecuteReaderAsync(CommandDefinition command, CancellationToken cancellationToken = default)
+    {
+        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        var validationError = ValidateCommandDefinition(command);
+        if (validationError is not null)
+        {
+            throw new DbCallerException(validationError);
+        }
+
+        try
+        {
+            var dbCommand = await CreateCommandAsync(command, cancellationToken).ConfigureAwait(false);
+            return await dbCommand.ExecuteReaderAsync(command.Behavior, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            throw WrapException(ex);
+        }
+    }
+
+    /// <summary>Stream rows for a single SELECT.</summary>
+    public async IAsyncEnumerable<IDataRecord> StreamAsync(CommandDefinition command, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (_options.DatabaseType == DatabaseType.Oracle)
+        {
+            // Oracle cursors require buffering; disallow streaming to avoid partial results.
+            throw new DatabaseException(ErrorCategory.Unsupported, "Streaming is not supported for Oracle in StreamAsync. Use buffered materialization instead.");
+        }
+
+        await using var reader = await ExecuteReaderAsync(command, cancellationToken).ConfigureAwait(false);
+        await foreach (var record in reader.StreamRecordsAsync(cancellationToken).ConfigureAwait(false))
+        {
+            yield return record;
+        }
+    }
+
     /// <summary>Execute a command that returns only a row count.</summary>
     public async ValueTask<int> ExecuteAsync(CommandDefinition command, CancellationToken cancellationToken = default)
     {
@@ -150,8 +186,8 @@ public sealed class DbExecutor : IDbExecutor
         }
     }
 
-    /// <summary>Stream rows with an explicit mapper for high performance.</summary>
-    public IAsyncEnumerable<T> QueryAsync<T>(CommandDefinition command, Func<IDataRecord, T> map, CancellationToken cancellationToken = default)
+    /// <summary>Buffer rows with an explicit mapper.</summary>
+    public async ValueTask<List<T>> QueryAsync<T>(CommandDefinition command, Func<DataRow, T> map, CancellationToken cancellationToken = default)
     {
         Validate.Required(map, nameof(map));
         var validationError = ValidateCommandDefinition(command);
@@ -160,8 +196,15 @@ public sealed class DbExecutor : IDbExecutor
             throw new DbCallerException(validationError);
         }
 
-        // Keep explicit mapping here; automatic mapping can wrap this method later without touching the execution path.
-        return QueryAsyncIterator(command, map, cancellationToken);
+        try
+        {
+            var table = await QueryTableAsync(command, cancellationToken).ConfigureAwait(false);
+            return table.ToList(map);
+        }
+        catch (Exception ex)
+        {
+            throw WrapException(ex);
+        }
     }
 
     /// <summary>Stream multiple result sets with per-set mappers (non-buffered; not for refcursor procs).</summary>
@@ -255,7 +298,7 @@ public sealed class DbExecutor : IDbExecutor
 
         await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
-        var cursorNames = CollectPostgresCursorNames(dbCommand);
+        var cursorNames = CursorHelper.CollectPostgresCursorNames(dbCommand);
 
         if (cursorNames.Count > mappers.Length)
         {
@@ -287,34 +330,6 @@ public sealed class DbExecutor : IDbExecutor
         }
     }
 
-    private async IAsyncEnumerable<(int SetIndex, T Item)> StreamOracleRefCursors<T>(
-        CommandDefinition command,
-        Func<IDataRecord, T>[] mappers,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        await using var dbCommand = await CreateCommandAsync(command, cancellationToken).ConfigureAwait(false);
-        await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-
-        var cursors = OracleProvider.ReadRefCursorResults(dbCommand);
-        if (cursors.Count > mappers.Length)
-        {
-            throw new DatabaseException(ErrorCategory.Unsupported, "Additional result sets exist without corresponding mappers.");
-        }
-
-        var setIndex = 0;
-        foreach (var table in cursors)
-        {
-            var map = mappers[setIndex] ?? throw new ArgumentNullException($"mappers[{setIndex}]");
-            using var reader = table.CreateDataReader();
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                yield return (setIndex, map(reader));
-            }
-            setIndex++;
-        }
-    }
-
     /// <summary>Materialize result sets into tables for callers that need DataTable/DataSet.</summary>
     public async ValueTask<DbResult> QueryTablesAsync(CommandDefinition command, CancellationToken cancellationToken = default)
     {
@@ -340,23 +355,14 @@ public sealed class DbExecutor : IDbExecutor
             return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
                 await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
-                var tables = new List<DataTable>();
-
-                // Default behavior keeps provider defaults while enabling NextResult for multi-sets.
-                await using var reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.Default, ct).ConfigureAwait(false);
-                do
-                {
-                    var table = new DataTable();
-                    table.Load(reader);
-                    tables.Add(table);
-                } while (await reader.NextResultAsync(ct).ConfigureAwait(false));
+                var tables = await DataAdapterHelper.FillTablesAsync(dbCommand, ct).ConfigureAwait(false);
 
                 return new DbResult
                 {
                     Success = true,
                     Tables = tables,
                     OutputParameters = command.Parameters is { Count: > 0 }
-                        ? ExtractOutputParameters(dbCommand, command.Parameters)
+                        ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
                         : null
                 };
             }, cancellationToken).ConfigureAwait(false);
@@ -366,6 +372,66 @@ public sealed class DbExecutor : IDbExecutor
             var error = MapError(ex);
             return new DbResult { Success = false, Error = error };
         }
+    }
+
+    /// <summary>Buffered single result as DataTable.</summary>
+    public async ValueTask<DataTable> QueryTableAsync(CommandDefinition command, CancellationToken cancellationToken = default)
+    {
+        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        var validationError = ValidateCommandDefinition(command);
+        if (validationError is not null)
+        {
+            throw new DbCallerException(validationError);
+        }
+
+        // Oracle and PostgreSQL refcursor paths rely on DataAdapter to hydrate cursor outputs.
+        if (CursorHelper.IsOracleRefCursor(_options.DatabaseType, command) ||
+            CursorHelper.IsPostgresRefCursor(_options.DatabaseType, command))
+        {
+            // Reuse the multi-result buffered path so cursor handling stays consistent.
+            var multi = await QueryTablesAsync(command, cancellationToken).ConfigureAwait(false);
+            if (!multi.Success)
+            {
+                throw new DbCallerException(multi.Error ?? DbErrorMapper.Map(new DatabaseException(ErrorCategory.State, "QueryTableAsync failed.")));
+            }
+
+            return multi.Tables is { Count: > 0 } ? multi.Tables[0] : new DataTable();
+        }
+
+        try
+        {
+            return await ExecuteWithRetryIfAllowedAsync(async ct =>
+            {
+                await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
+                var table = await DataAdapterHelper.FillTableAsync(dbCommand, ct).ConfigureAwait(false);
+                return table;
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            throw WrapException(ex);
+        }
+    }
+
+    /// <summary>Buffered multi-result as DataSet.</summary>
+    public async ValueTask<DataSet> ExecuteDataSetAsync(CommandDefinition command, CancellationToken cancellationToken = default)
+    {
+        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        var validationError = ValidateCommandDefinition(command);
+        if (validationError is not null)
+        {
+            throw new DbCallerException(validationError);
+        }
+
+        var (dataSet, _) = await ExecuteDataSetInternalAsync(command, cancellationToken).ConfigureAwait(false);
+        return dataSet;
+    }
+
+    /// <summary>Buffered multi-result as MultiResult.</summary>
+    public async ValueTask<MultiResult> QueryMultipleAsync(CommandDefinition command, CancellationToken cancellationToken = default)
+    {
+        var (dataSet, outputs) = await ExecuteDataSetInternalAsync(command, cancellationToken).ConfigureAwait(false);
+        return dataSet.ToMultiResult(outputs);
     }
 
     /// <summary>Bulk import data using provider-specific fast paths.</summary>
@@ -537,7 +603,7 @@ public sealed class DbExecutor : IDbExecutor
         {
             _connection = _options.DataSource is not null
                 ? _options.DataSource.CreateConnection()
-                : _provider.CreateConnection(_options.ConnectionString);
+                : _provider.CreateConnection(_options.ConnectionString ?? throw new DatabaseException(ErrorCategory.Configuration, "ConnectionString is required."));
         }
 
         if (_connection.State != ConnectionState.Open)
@@ -565,259 +631,8 @@ public sealed class DbExecutor : IDbExecutor
     #endregion
 
     #region Command routing and validation
-    private bool ShouldUseOracleRefCursorPath(CommandDefinition command) =>
-        // Oracle returns ref cursors as output parameters instead of result sets.
-        _options.DatabaseType == DatabaseType.Oracle
-        && command.CommandType == CommandType.StoredProcedure
-        && command.Parameters is { Count: > 0 }
-        && command.Parameters.Any(p => p.DataType == DbDataType.RefCursor);
-
-    private bool ShouldUsePostgresRefCursorPath(CommandDefinition command) =>
-        // PostgreSQL refcursors must be fetched explicitly, so we switch to a dedicated path.
-        _options.DatabaseType == DatabaseType.PostgreSql
-        && command.CommandType == CommandType.StoredProcedure
-        && command.Parameters is { Count: > 0 }
-        && command.Parameters.Any(p => p.DataType == DbDataType.RefCursor);
-
     private DbError? ValidateCommandDefinition(CommandDefinition command) =>
         ValidationRunner.ValidateCommand(command, _options.EnableValidation, _commandValidator, _parameterValidator);
-    #endregion
-
-    #region Refcursor transaction helpers
-    /// <summary>
-    /// For refcursor scenarios: reuse the caller's transaction when present; otherwise start a short-lived transaction.
-    /// </summary>
-    private async ValueTask<DbTransaction?> GetRefCursorTransactionAsync(CancellationToken cancellationToken)
-    {
-        await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
-        return _activeTransaction is null
-            ? await _connection!.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
-            : null;
-    }
-
-    /// <summary>Collect output refcursor names after executing a PostgreSQL stored procedure.</summary>
-    private static List<string> CollectPostgresCursorNames(DbCommand dbCommand)
-    {
-        var names = new List<string>();
-        foreach (System.Data.Common.DbParameter parameter in dbCommand.Parameters)
-        {
-            if (parameter.Direction == ParameterDirection.Output
-                && parameter.Value is string cursorName
-                && !string.IsNullOrWhiteSpace(cursorName))
-            {
-                names.Add(cursorName);
-            }
-        }
-
-        return names;
-    }
-    #endregion
-
-    #region Refcursor execution
-    private async ValueTask<DbResult> ExecuteOracleRefCursorsAsync(CommandDefinition command, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await ExecuteWithRetryIfAllowedAsync(async ct =>
-            {
-                await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
-                await dbCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-
-                var tables = OracleProvider.ReadRefCursorResults(dbCommand);
-                return new DbResult
-                {
-                    Success = true,
-                    Tables = tables,
-                    OutputParameters = command.Parameters is { Count: > 0 }
-                        ? ExtractOutputParameters(dbCommand, command.Parameters)
-                        : null
-                };
-            }, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            var error = MapError(ex);
-            return new DbResult { Success = false, Error = error };
-        }
-    }
-
-    private async ValueTask<DbResult> ExecutePostgresRefCursorsAsync(CommandDefinition command, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await ExecuteWithRetryIfAllowedAsync(async ct =>
-            {
-                // Refcursor fetches require a transaction scope in PostgreSQL; start one only when the caller has not.
-                await using var transaction = await GetRefCursorTransactionAsync(ct).ConfigureAwait(false);
-                await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
-                if (transaction is not null)
-                {
-                    dbCommand.Transaction = transaction;
-                }
-                try
-                {
-                    await dbCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-
-                    var tables = await PostgreSqlProvider
-                        .ReadRefCursorResultsAsync(dbCommand, _connection!, transaction ?? _activeTransaction!, ct)
-                        .ConfigureAwait(false);
-
-                if (transaction is not null)
-                {
-                    await transaction.CommitAsync(ct).ConfigureAwait(false);
-                }
-
-                    return new DbResult
-                    {
-                        Success = true,
-                        Tables = tables,
-                        OutputParameters = command.Parameters is { Count: > 0 }
-                            ? ExtractOutputParameters(dbCommand, command.Parameters)
-                            : null
-                    };
-                }
-                catch
-                {
-                    if (transaction is not null)
-                    {
-                        await transaction.RollbackAsync(ct).ConfigureAwait(false);
-                    }
-                    throw;
-                }
-            }, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            var error = MapError(ex);
-            return new DbResult { Success = false, Error = error };
-        }
-    }
-
-    #endregion
-
-    #region Output parameter helpers
-    // Extracts non-input parameters, skipping refcursors (handled as result sets) and normalizing via declared DbDataType.
-    private static IReadOnlyDictionary<string, object?>? ExtractOutputParameters(
-        DbCommand command,
-        IReadOnlyList<DbParameter>? parameters)
-    {
-        // Gather caller-specified output metadata (names, DbDataType) so we can normalize values and skip refcursors.
-        if (parameters is null || parameters.Count == 0)
-        {
-            return null;
-        }
-
-        if (command.Parameters.Count == 0)
-        {
-            return null;
-        }
-
-        // Build a quick lookup so we can normalize by declared DbDataType and skip refcursors.
-        Dictionary<string, DbParameter>? parameterLookup = null;
-        if (parameters is { Count: > 0 })
-        {
-            parameterLookup = new Dictionary<string, DbParameter>(StringComparer.OrdinalIgnoreCase);
-            foreach (var parameter in parameters)
-            {
-                // Use trimmed names so provider prefixes don't break matching.
-                var name = TrimParameterPrefix(parameter.Name);
-                parameterLookup[name] = parameter;
-            }
-        }
-
-        Dictionary<string, object?>? outputValues = null;
-
-        foreach (System.Data.Common.DbParameter parameter in command.Parameters)
-        {
-            if (parameter.Direction == ParameterDirection.Input)
-            {
-                continue;
-            }
-
-            var name = TrimParameterPrefix(parameter.ParameterName);
-            DbParameter? definition = null;
-            var hasDefinition = parameterLookup is not null && parameterLookup.TryGetValue(name, out definition);
-
-            // Refcursor outputs are consumed separately as result sets; ignore their parameter values.
-            if (hasDefinition && definition != null && definition.DataType == DbDataType.RefCursor)
-            {
-                continue;
-            }
-
-            outputValues ??= new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-            if (hasDefinition && definition != null)
-            {
-                outputValues[name] = OutputParameterConverter.Normalize(parameter.Value, definition.DataType);
-            }
-            else
-            {
-                // No definition available; surface provider value (with DBNull → null) so callers still get the output.
-                outputValues[name] = parameter.Value is DBNull ? null : parameter.Value;
-            }
-        }
-
-        return outputValues;
-    }
-
-    private static string TrimParameterPrefix(string name)
-    {
-        if (string.IsNullOrEmpty(name))
-        {
-            return name;
-        }
-
-        return name[0] is '@' or ':' or '?' ? name[1..] : name;
-    }
-    #endregion
-
-    #region Streaming iterators
-
-    private async IAsyncEnumerable<T> QueryAsyncIterator<T>(
-        CommandDefinition command,
-        Func<IDataRecord, T> map,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        // Ensure the executor wasn't disposed before opening readers/commands.
-        await EnsureNotDisposedAsync().ConfigureAwait(false);
-
-        await using var enumerator = ExecuteQueryAsync(command, map, cancellationToken)
-            .GetAsyncEnumerator(cancellationToken);
-
-        while (true)
-        {
-            T current;
-            try
-            {
-                if (!await enumerator.MoveNextAsync().ConfigureAwait(false))
-                {
-                    yield break;
-                }
-
-                current = enumerator.Current;
-            }
-            catch (Exception ex)
-            {
-                throw WrapException(ex);
-            }
-
-            yield return current;
-        }
-    }
-
-    private async IAsyncEnumerable<T> ExecuteQueryAsync<T>(
-        CommandDefinition command,
-        Func<IDataRecord, T> map,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        await using var dbCommand = await CreateCommandAsync(command, cancellationToken).ConfigureAwait(false);
-        await using var reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.Default, cancellationToken).ConfigureAwait(false);
-
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            yield return map(reader);
-        }
-    }
-
     #endregion
 
     #region Execution and resilience helpers
@@ -893,26 +708,39 @@ public sealed class DbExecutor : IDbExecutor
         return MapProviderError(_options.DatabaseType, exception);
     }
 
+    private async ValueTask<(DataSet DataSet, IReadOnlyDictionary<string, object?>? OutputParameters)> ExecuteDataSetInternalAsync(
+        CommandDefinition command,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ExecuteWithRetryIfAllowedAsync(async ct =>
+            {
+                await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
+
+                // Cursor scenarios rely on DataAdapter fill; this path is used for all providers.
+                var dataSet = await DataAdapterHelper.FillDataSetAsync(dbCommand, ct).ConfigureAwait(false);
+                var outputs = command.Parameters is { Count: > 0 }
+                    ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
+                    : null;
+
+                return (dataSet, outputs);
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            throw WrapException(ex);
+        }
+    }
+
     #endregion
 
     #region Provider resolution
     private static IDbProvider ResolveProvider(DatabaseType databaseType) =>
-        databaseType switch
-        {
-            DatabaseType.SqlServer => new SqlServerProvider(),
-            DatabaseType.PostgreSql => new PostgreSqlProvider(),
-            DatabaseType.Oracle => new OracleProvider(),
-            _ => throw new DatabaseException(ErrorCategory.Unsupported, $"Database type '{databaseType}' is not supported.")
-        };
+        ProviderHelper.ResolveProvider(databaseType);
 
     private static DbError MapProviderError(DatabaseType databaseType, Exception exception) =>
-        databaseType switch
-        {
-            DatabaseType.SqlServer => SqlServerExceptionMapper.Map(exception),
-            DatabaseType.PostgreSql => PostgreSqlExceptionMapper.Map(exception),
-            DatabaseType.Oracle => OracleExceptionMapper.Map(exception),
-            _ => DbErrorMapper.Unknown(exception)
-        };
+        ProviderHelper.MapProviderError(databaseType, exception);
     #endregion
     #endregion
 }

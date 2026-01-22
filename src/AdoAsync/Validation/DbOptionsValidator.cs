@@ -24,10 +24,10 @@ public sealed class DbOptionsValidator : AbstractValidator<DbOptions>
                 .When(x => string.IsNullOrWhiteSpace(x.ConnectionString))
                 .WithMessage("DataSource is required.");
 
-            // Allow 0 (infinite) or any positive value
+            // Require positive timeout to avoid infinite commands by default.
             RuleFor(x => x.CommandTimeoutSeconds)
-                .GreaterThanOrEqualTo(0)
-                .WithMessage("CommandTimeoutSeconds must be 0 (infinite) or a positive value.");
+                .GreaterThan(0)
+                .WithMessage("CommandTimeoutSeconds must be a positive value.");
 
             // Retry validation only when EnableRetry is also true
             When(x => x.EnableRetry, () =>

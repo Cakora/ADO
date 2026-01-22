@@ -38,15 +38,11 @@ public class QueryTablesIntegrationTests
             CommandType = CommandType.Text
         };
 
-        var results = new List<SampleRow>();
-        await foreach (var row in executor.QueryAsync(command, record => new SampleRow
+        var results = await executor.QueryAsync(command, row => new SampleRow
         {
-            Id = record.GetInt32(0),
-            Name = record.GetString(1)
-        }))
-        {
-            results.Add(row);
-        }
+            Id = row.Field<int>("Id"),
+            Name = row.Field<string>("Name") ?? string.Empty
+        });
 
         Assert.NotEmpty(results);
     }
@@ -77,15 +73,11 @@ public class QueryTablesIntegrationTests
             Parameters = new List<DbParameter>()
         };
 
-        var results = new List<SampleRow>();
-        await foreach (var row in executor.QueryAsync(command, record => new SampleRow
+        var results = await executor.QueryAsync(command, row => new SampleRow
         {
-            Id = record.GetInt32(0),
-            Name = record.GetString(1)
-        }))
-        {
-            results.Add(row);
-        }
+            Id = row.Field<int>("Id"),
+            Name = row.Field<string>("Name") ?? string.Empty
+        });
 
         Assert.NotEmpty(results);
     }

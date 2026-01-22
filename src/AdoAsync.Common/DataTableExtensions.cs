@@ -37,8 +37,9 @@ public static class DataTableExtensions
             }
         }
 
-        foreach (DataRow row in table.Rows)
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
+            var row = table.Rows[rowIndex];
             var newRow = normalized.NewRow();
             for (var i = 0; i < table.Columns.Count; i++)
             {

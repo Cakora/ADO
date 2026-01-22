@@ -17,7 +17,7 @@ public static class SqlServerExceptionMapper
             return DbErrorMapper.Map(exception);
         }
 
-        return ErrorRuleMatcher.Map(sqlEx, Rules, DbErrorMapper.Unknown);
+        return ErrorRuleMatcher.Map(sqlEx, Rules, ex => DbErrorMapper.Map(ex));
     }
     #endregion
 

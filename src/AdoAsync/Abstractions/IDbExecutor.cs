@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
-using AdoAsync.BulkCopy.LinqToDb.Common;
-using AdoAsync.Transactions;
 
 namespace AdoAsync.Abstractions;
 
@@ -14,33 +13,25 @@ namespace AdoAsync.Abstractions;
 public interface IDbExecutor : IAsyncDisposable
 {
     #region Members
-    /// <summary>Executes a non-query command.</summary>
-    ValueTask<int> ExecuteAsync(CommandDefinition command, CancellationToken cancellationToken = default);
+    /// <summary>Executes a single SELECT and returns a streaming reader (SQL Server/PostgreSQL only; caller owns reader lifecycle).</summary>
+    ValueTask<DbDataReader> ExecuteReaderAsync(CommandDefinition command, CancellationToken cancellationToken = default);
+
+    /// <summary>Streams records from a single SELECT via ReadAsync (SQL Server/PostgreSQL only).</summary>
+    IAsyncEnumerable<IDataRecord> StreamAsync(CommandDefinition command, CancellationToken cancellationToken = default);
 
     /// <summary>Executes a scalar command and returns the value converted to <typeparamref name="T"/>.</summary>
     ValueTask<T> ExecuteScalarAsync<T>(CommandDefinition command, CancellationToken cancellationToken = default);
 
-    /// <summary>Streams rows and maps each record via the provided mapper.</summary>
-    // Explicit mapper keeps this fast; automatic mapping can be added later as an optional wrapper.
-    IAsyncEnumerable<T> QueryAsync<T>(CommandDefinition command, Func<IDataRecord, T> map, CancellationToken cancellationToken = default);
+    /// <summary>Executes a single result and returns a buffered <see cref="DataTable"/> via provider DataAdapter.</summary>
+    ValueTask<DataTable> QueryTableAsync(CommandDefinition command, CancellationToken cancellationToken = default);
 
-    /// <summary>Streams multiple result sets with per-set mappers (non-buffered).</summary>
-    IAsyncEnumerable<(int SetIndex, T Item)> QueryMultiAsync<T>(CommandDefinition command, Func<IDataRecord, T>[] mappers, CancellationToken cancellationToken = default);
+    /// <summary>Executes a single result and returns a buffered, mapped list from the resulting DataTable.</summary>
+    ValueTask<List<T>> QueryAsync<T>(CommandDefinition command, Func<DataRow, T> map, CancellationToken cancellationToken = default);
 
-    /// <summary>Executes a command and materializes results into tables (allocation-heavy).</summary>
-    // Use when streaming isn't an option (e.g., DataSet/DataTable consumers).
-    ValueTask<DbResult> QueryTablesAsync(CommandDefinition command, CancellationToken cancellationToken = default);
+    /// <summary>Executes multiple SELECT statements or cursor results and returns a <see cref="DataSet"/> via provider DataAdapter.</summary>
+    ValueTask<DataSet> ExecuteDataSetAsync(CommandDefinition command, CancellationToken cancellationToken = default);
 
-    /// <summary>Performs a bulk import into a destination table.</summary>
-    ValueTask<BulkImportResult> BulkImportAsync(BulkImportRequest request, CancellationToken cancellationToken = default);
-
-    /// <summary>Performs a typed bulk import via linq2db (requires DbOptions.LinqToDb.Enable).</summary>
-    ValueTask<BulkImportResult> BulkImportAsync<T>(IEnumerable<T> items, string? tableName = null, LinqToDbBulkOptions? bulkOptions = null, CancellationToken cancellationToken = default) where T : class;
-
-    /// <summary>Performs a typed async bulk import via linq2db (requires DbOptions.LinqToDb.Enable).</summary>
-    ValueTask<BulkImportResult> BulkImportAsync<T>(IAsyncEnumerable<T> items, string? tableName = null, LinqToDbBulkOptions? bulkOptions = null, CancellationToken cancellationToken = default) where T : class;
-
-    /// <summary>Begins an explicit transaction on the executor connection (rollback-on-dispose unless committed).</summary>
-    ValueTask<TransactionHandle> BeginTransactionAsync(CancellationToken cancellationToken = default);
+    /// <summary>Executes multiple SELECT statements or cursor results and returns a structured multi-result (DataSet + output parameters).</summary>
+    ValueTask<MultiResult> QueryMultipleAsync(CommandDefinition command, CancellationToken cancellationToken = default);
     #endregion
 }

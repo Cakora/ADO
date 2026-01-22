@@ -61,8 +61,9 @@ public static class CsvExtensions
             builder.AppendLine();
         }
 
-        foreach (DataRow row in table.Rows)
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
+            var row = table.Rows[rowIndex];
             for (var i = 0; i < table.Columns.Count; i++)
             {
                 if (i > 0)
