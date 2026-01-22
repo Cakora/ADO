@@ -3,11 +3,9 @@
 ## Added
 - src/AdoAsync/Abstractions/StreamingReaderResult.cs:1-77
 - src/AdoAsync/Exceptions/ExceptionHandler.cs:1-24
-- src/AdoAsync/Extensions/Execution/DataTableOutputExtensions.cs:1-28
-- src/AdoAsync/Extensions/Execution/DataSetOutputExtensions.cs:1-28
+- src/AdoAsync/Extensions/Execution/DataTableOutputExtensions.cs:1-38
 - src/AdoAsync/Validation/Localization/ResxLanguageManager.cs:1-37
-- tests/AdoAsync.Tests/DataTableOutputExtensionsTests.cs:1-32
-- tests/AdoAsync.Tests/DataSetOutputExtensionsTests.cs:1-32
+- tests/AdoAsync.Tests/OutputParameterExtensionsTests.cs:1-54
 
 ## Updated
 - src/AdoAsync/Abstractions/IDbExecutor.cs:16-35
