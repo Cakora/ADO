@@ -10,6 +10,46 @@ namespace AdoAsync.Tests;
 public class ParameterHelperTests
 {
     [Fact]
+    public void HasNonRefCursorOutputs_ReturnsFalse_WhenNullOrEmpty()
+    {
+        ParameterHelper.HasNonRefCursorOutputs(null).Should().BeFalse();
+        ParameterHelper.HasNonRefCursorOutputs(new List<DbParameter>()).Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasNonRefCursorOutputs_ReturnsFalse_WhenNoOutputs()
+    {
+        var parameters = new List<DbParameter>
+        {
+            new() { Name = "@in", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = 7 }
+        };
+
+        ParameterHelper.HasNonRefCursorOutputs(parameters).Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasNonRefCursorOutputs_ReturnsFalse_WhenOnlyRefCursorOutputs()
+    {
+        var parameters = new List<DbParameter>
+        {
+            new() { Name = "@cursor", DataType = DbDataType.RefCursor, Direction = ParameterDirection.Output }
+        };
+
+        ParameterHelper.HasNonRefCursorOutputs(parameters).Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasNonRefCursorOutputs_ReturnsTrue_WhenOutputDeclared()
+    {
+        var parameters = new List<DbParameter>
+        {
+            new() { Name = "@total", DataType = DbDataType.Int32, Direction = ParameterDirection.Output }
+        };
+
+        ParameterHelper.HasNonRefCursorOutputs(parameters).Should().BeTrue();
+    }
+
+    [Fact]
     public void ExtractOutputParameters_NormalizesOutputs()
     {
         using var command = new SqlCommand();

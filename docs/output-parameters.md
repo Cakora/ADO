@@ -144,7 +144,7 @@ int? status = (int?)outputs["status"];
 ## 4) Streaming + outputs (SQL Server/PostgreSQL only)
 
 Output parameters are not available until the reader is finished/closed.
-Use `ExecuteReaderWithOutputsAsync` when you must stream rows and also need outputs.
+Use `ExecuteReaderAsync` when you must stream rows and also need outputs (declare output parameters in `CommandDefinition.Parameters`).
 
 ```csharp
 using System.Collections.Generic;
@@ -152,7 +152,7 @@ using System.Data;
 using AdoAsync;
 using AdoAsync.Execution;
 
-await using StreamingReaderResult result = await executor.ExecuteReaderWithOutputsAsync(new CommandDefinition
+await using StreamingReaderResult result = await executor.ExecuteReaderAsync(new CommandDefinition
 {
     CommandText = "dbo.SelectCustomersAndReturnTotal",
     CommandType = CommandType.StoredProcedure,

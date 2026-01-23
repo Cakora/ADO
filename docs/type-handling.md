@@ -52,7 +52,7 @@ Output parameters are surfaced via tuple-returning executor methods:
 
 For streaming reader + outputs (SQL Server/PostgreSQL only), use:
 
-- `ExecuteReaderWithOutputsAsync` → `StreamingReaderResult.GetOutputParametersAsync()`
+- `ExecuteReaderAsync` → `StreamingReaderResult.GetOutputParametersAsync()` (after reader closed; returns `null` if no outputs declared)
 
 ---
 

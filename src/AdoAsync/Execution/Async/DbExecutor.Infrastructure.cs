@@ -103,7 +103,24 @@ public sealed partial class DbExecutor
 
     #region Private - Output Parameters
     private static IReadOnlyDictionary<string, object?> ExtractOutputParametersOrEmpty(DbCommand command, IReadOnlyList<DbParameter>? declaredParameters)
-        => ParameterHelper.ExtractOutputParameters(command, declaredParameters) ?? EmptyOutputParameters;
+    {
+        if (!ParameterHelper.HasNonRefCursorOutputs(declaredParameters))
+        {
+            return EmptyOutputParameters;
+        }
+
+        return ParameterHelper.ExtractOutputParameters(command, declaredParameters) ?? EmptyOutputParameters;
+    }
+    #endregion
+
+    #region Private - Disposal
+    private static async ValueTask DisposeCommandAsync(DbCommand? command)
+    {
+        if (command is not null)
+        {
+            await command.DisposeAsync().ConfigureAwait(false);
+        }
+    }
     #endregion
 
     #region Private - Errors

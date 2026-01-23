@@ -15,8 +15,7 @@ This provider uses:
 
 | Feature | Supported | Notes |
 |---|---:|---|
-| Streaming (`ExecuteReaderAsync`, `StreamAsync`) | Yes | best performance; output params not returned |
-| Streaming + output params (`ExecuteReaderWithOutputsAsync`) | Yes | outputs available after reader is closed |
+| Streaming (`ExecuteReaderAsync`, `StreamAsync`) | Yes | best performance; output params available after reader is closed (if declared) |
 | Buffered single result (`QueryTableAsync`) | Yes | output params attached to `DataTable.ExtendedProperties` |
 | Buffered multi-result (`QueryTablesAsync`) | Yes | supports multi-SELECT SQL and refcursor procedures |
 | Buffered `DataSet` (`ExecuteDataSetAsync`) | Yes | for multi-SELECT; for refcursor it routes through refcursor path |

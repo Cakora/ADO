@@ -4,8 +4,7 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 
 ## Added
 
-- `src/AdoAsync/Abstractions/IDbExecutor.cs:27` `ValueTask<StreamingReaderResult> ExecuteReaderWithOutputsAsync(CommandDefinition command, CancellationToken cancellationToken = default);`
-- `src/AdoAsync/Execution/Async/DbExecutor.ExecutionAndQuery.cs:40` `public async ValueTask<StreamingReaderResult> ExecuteReaderWithOutputsAsync(CommandDefinition command, CancellationToken cancellationToken = default)`
+- `src/AdoAsync/Abstractions/IDbExecutor.cs:21` `ValueTask<StreamingReaderResult> ExecuteReaderAsync(CommandDefinition command, CancellationToken cancellationToken = default);`
 - `src/AdoAsync/Abstractions/IDbExecutor.cs:93` `ValueTask<TransactionHandle> BeginTransactionAsync(CancellationToken cancellationToken = default);`
 - `src/AdoAsync/Execution/Async/DbExecutor.Transactions.cs:11` `public async ValueTask<TransactionHandle> BeginTransactionAsync(CancellationToken cancellationToken = default)`
 
@@ -20,14 +19,14 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 
 ## Changed (Executor methods / locations)
 
-- `src/AdoAsync/Execution/Async/DbExecutor.ExecutionAndQuery.cs:18` `public async ValueTask<DbDataReader> ExecuteReaderAsync(...)`
-- `src/AdoAsync/Execution/Async/DbExecutor.ExecutionAndQuery.cs:72` `public async IAsyncEnumerable<IDataRecord> StreamAsync(...)`
-- `src/AdoAsync/Execution/Async/DbExecutor.ExecutionAndQuery.cs:89` `public async ValueTask<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteAsync(...)`
-- `src/AdoAsync/Execution/Async/DbExecutor.ExecutionAndQuery.cs:117` `public async ValueTask<(T Value, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteScalarAsync<T>(...)`
-- `src/AdoAsync/Execution/Async/DbExecutor.ExecutionAndQuery.cs:158` `public async ValueTask<(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTableAsync(...)`
-- `src/AdoAsync/Execution/Async/DbExecutor.ExecutionAndQuery.cs:193` `public async ValueTask<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTablesAsync(...)`
-- `src/AdoAsync/Execution/Async/DbExecutor.ExecutionAndQuery.cs:227` `public async ValueTask<(List<T> Rows, IReadOnlyDictionary<string, object?> OutputParameters)> QueryAsync<T>(...)`
-- `src/AdoAsync/Execution/Async/DbExecutor.ExecutionAndQuery.cs:253` `public async ValueTask<(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteDataSetAsync(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:87` `public async ValueTask<StreamingReaderResult> ExecuteReaderAsync(CommandDefinition command, CancellationToken cancellationToken = default)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:98` `public async IAsyncEnumerable<IDataRecord> StreamAsync(CommandDefinition command, CancellationToken cancellationToken = default)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:170` `public async ValueTask<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteAsync(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:198` `public async ValueTask<(T Value, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteScalarAsync<T>(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:239` `public async ValueTask<(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTableAsync(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:274` `public async ValueTask<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTablesAsync(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:308` `public async ValueTask<(List<T> Rows, IReadOnlyDictionary<string, object?> OutputParameters)> QueryAsync<T>(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:334` `public async ValueTask<(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteDataSetAsync(...)`
 
 ## Changed (Output parameter rules)
 
@@ -49,8 +48,8 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 
 ## Changed (Normalization helpers)
 
-- `src/AdoAsync/Extensions/Execution/ValueNormalizationExtensions.cs:137` `public static object? NormalizeByType(this object? value, DbDataType dataType)`
-- `src/AdoAsync/Extensions/Execution/ValueNormalizationExtensions.cs:147` `public static T? NormalizeAsNullable<T>(this object? value, DbDataType dataType) where T : struct`
+- `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs:100` `public static object? NormalizeByType(this object? value, DbDataType dataType)`
+- `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs:115` `public static T? NormalizeAsNullable<T>(this object? value, DbDataType dataType) where T : struct`
 
 ## Performance / Allocation
 
@@ -59,10 +58,21 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 - `src/AdoAsync/Helpers/ParameterHelper.cs:15` `ExtractOutputParameters(...)`
   - Uses a single `Dictionary` for declared parameter lookup (reduced allocations).
 
+## Documentation / Ownership (XML docs)
+
+- Enforced lifetime/ownership notes on conversion methods:
+  - `src/AdoAsync/Extensions/DataReader/DbDataReaderExtensions.cs:34` `StreamRecordsAsync(...)`
+  - `src/AdoAsync/Extensions/DataTable/DataTableExtensions.cs:32` `ToList<T>(...)`
+  - `src/AdoAsync/Extensions/DataTable/DataTableExtensions.cs:68` `ToArray<T>(...)`
+  - `src/AdoAsync/Extensions/AsyncEnumerable/AsyncEnumerableMaterializerExtensions.cs:44` `ToListAsync<T>(...)`
+  - `src/AdoAsync/Extensions/AsyncEnumerable/AsyncEnumerableMaterializerExtensions.cs:75` `ToArrayAsync<T>(...)`
+  - `src/AdoAsync/Extensions/AsyncEnumerable/AsyncEnumerableMaterializerExtensions.cs:98` `ToLookupAsync<TSource, TKey>(...)`
+  - `src/AdoAsync/Extensions/AsyncEnumerable/AsyncEnumerableMaterializerExtensions.cs:129` `ToFrozenDictionaryAsync<TSource, TKey, TValue>(...)`
+
 ## Refactor / Structure
 
 - Executor split into feature-based partials:
-  - `src/AdoAsync/Execution/Async/DbExecutor.ExecutionAndQuery.cs` (streaming + execute + buffered query)
+  - `src/AdoAsync/Execution/Async/DbExecutor.cs` (streaming + execute + buffered query + dataset)
   - `src/AdoAsync/Execution/Async/DbExecutor.Transactions.cs` (explicit transactions)
   - `src/AdoAsync/Execution/Async/DbExecutor.Bulk.cs` (bulk import)
   - `src/AdoAsync/Execution/Async/DbExecutor.Infrastructure.cs` (connection/validation/retry/error helpers)
@@ -70,8 +80,8 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 
 ## Removed
 
+- `src/AdoAsync/Execution/Async/DbExecutor.Streaming.cs` (moved into `DbExecutor.cs`)
 - `src/AdoAsync/Execution/OutputParameterConverter.cs` (renamed/replaced by internal normalizer; public API remains `NormalizeByType`).
 - `src/AdoAsync/Extensions/Execution/DataTableOutputExtensions.cs` (removed)
 - `src/AdoAsync/Extensions/Execution/DataSetOutputExtensions.cs` (removed)
 - `src/AdoAsync/Helpers/CursorHelper.cs` `CollectPostgresCursorNames(...)` (removed)
-

@@ -8,6 +8,13 @@ namespace AdoAsync.Helpers;
 
 internal static class ParameterHelper
 {
+    internal static bool HasNonRefCursorOutputs(IReadOnlyList<DbParameter>? parameters) =>
+        parameters is not null
+        && parameters.Count != 0
+        && parameters.Any(p =>
+            p.Direction is ParameterDirection.Output or ParameterDirection.InputOutput
+            && p.DataType != DbDataType.RefCursor);
+
     /// <summary>Extract non-input parameters, skipping refcursors (handled as result sets) and normalizing by declared DbDataType.</summary>
     /// <param name="command">Executed command containing provider parameters.</param>
     /// <param name="parameters">Caller-declared parameters with DbDataType metadata.</param>

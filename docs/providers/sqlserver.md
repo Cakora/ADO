@@ -15,8 +15,7 @@ This provider uses:
 
 | Feature | Supported | Notes |
 |---|---:|---|
-| Streaming (`ExecuteReaderAsync`, `StreamAsync`) | Yes | Best performance; output params not returned |
-| Streaming + output params (`ExecuteReaderWithOutputsAsync`) | Yes | outputs available after reader is closed |
+| Streaming (`ExecuteReaderAsync`, `StreamAsync`) | Yes | best performance; output params available after reader is closed (if declared) |
 | Buffered single result (`QueryTableAsync`) | Yes | output params returned in tuple |
 | Buffered multi-result (`QueryTablesAsync`) | Yes | multiple `SELECT` or stored procedure results |
 | Buffered `DataSet` (`ExecuteDataSetAsync`) | Yes | multi-result as DataSet |
@@ -50,7 +49,7 @@ using AdoAsync;
 using AdoAsync.Execution;
 
 await using var executor = DbExecutor.Create(options);
-await using var reader = await executor.ExecuteReaderAsync(new CommandDefinition
+await using var result = await executor.ExecuteReaderAsync(new CommandDefinition
 {
     CommandText = "select Id, Name from dbo.Customers where Id >= @minId",
     CommandType = CommandType.Text,
@@ -60,10 +59,10 @@ await using var reader = await executor.ExecuteReaderAsync(new CommandDefinition
     }
 });
 
-while (await reader.ReadAsync())
+while (await result.Reader.ReadAsync())
 {
-    var id = reader.GetInt32(0);
-    var name = reader.GetString(1);
+    var id = result.Reader.GetInt32(0);
+    var name = result.Reader.GetString(1);
 }
 ```
 
@@ -125,7 +124,7 @@ var message = (string?)result.OutputParameters["message"];
 ### Streaming outputs (only if you must stream rows)
 
 ```csharp
-await using var result = await executor.ExecuteReaderWithOutputsAsync(new CommandDefinition
+await using var result = await executor.ExecuteReaderAsync(new CommandDefinition
 {
     CommandText = "dbo.GetCustomersAndReturnTotal",
     CommandType = CommandType.StoredProcedure,

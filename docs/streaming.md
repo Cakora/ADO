@@ -81,7 +81,7 @@ public static class Demo
 
 Method:
 
-- `ValueTask<DbDataReader> IDbExecutor.ExecuteReaderAsync(...)`
+- `ValueTask<StreamingReaderResult> IDbExecutor.ExecuteReaderAsync(...)`
 
 Use when:
 
@@ -89,31 +89,31 @@ Use when:
 - You are fine with manual mapping
 
 ```csharp
-await using var reader = await executor.ExecuteReaderAsync(new CommandDefinition
+await using var result = await executor.ExecuteReaderAsync(new CommandDefinition
 {
     CommandText = "select Id, Name from dbo.Customers",
     CommandType = CommandType.Text
 });
 
-while (await reader.ReadAsync(cancellationToken))
+while (await result.Reader.ReadAsync(cancellationToken))
 {
-    var id = reader.GetInt32(0);
-    var name = reader.GetString(1);
+    var id = result.Reader.GetInt32(0);
+    var name = result.Reader.GetString(1);
 }
 ```
 
-### C) Streaming + output parameters: `ExecuteReaderWithOutputsAsync`
+### C) Streaming + output parameters: `ExecuteReaderAsync`
 
 Method:
 
-- `ValueTask<StreamingReaderResult> IDbExecutor.ExecuteReaderWithOutputsAsync(...)`
+- `ValueTask<StreamingReaderResult> IDbExecutor.ExecuteReaderAsync(...)`
 
 Important rule:
 
 - Output parameters are only available **after the reader is closed**, so you must finish/close the reader first.
 
 ```csharp
-await using var result = await executor.ExecuteReaderWithOutputsAsync(command, cancellationToken);
+await using var result = await executor.ExecuteReaderAsync(command, cancellationToken);
 
 await using (result.Reader)
 {

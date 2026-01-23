@@ -15,16 +15,10 @@ public interface IDbExecutor : IAsyncDisposable
 {
     #region Members
     /// <summary>
-    /// Executes a single SELECT and returns a streaming reader (SQL Server/PostgreSQL only; caller owns reader lifecycle).
-    /// Output parameters are not returned on this path.
+    /// Executes a single SELECT and returns a streaming reader result (SQL Server/PostgreSQL only).
+    /// Output parameters are available only after the reader is closed (when declared on <see cref="CommandDefinition.Parameters"/>).
     /// </summary>
-    ValueTask<DbDataReader> ExecuteReaderAsync(CommandDefinition command, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Executes a single SELECT and returns a streaming reader plus deferred output parameters (SQL Server/PostgreSQL only).
-    /// Read output parameters via <see cref="StreamingReaderResult.GetOutputParametersAsync"/> after the reader is closed.
-    /// </summary>
-    ValueTask<StreamingReaderResult> ExecuteReaderWithOutputsAsync(CommandDefinition command, CancellationToken cancellationToken = default);
+    ValueTask<StreamingReaderResult> ExecuteReaderAsync(CommandDefinition command, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Streams records from a single SELECT via ReadAsync (SQL Server/PostgreSQL only).

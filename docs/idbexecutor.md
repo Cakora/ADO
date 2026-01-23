@@ -110,8 +110,7 @@ Output parameters are not “returned” the same way on every method. Use this 
 
 | Method | Return | Output Params Supported? | How To Read Outputs |
 |---|---|---:|---|
-| `ExecuteReaderAsync` | `DbDataReader` | No | — |
-| `ExecuteReaderWithOutputsAsync` | `StreamingReaderResult` | Yes (SQL Server/PostgreSQL) | `await result.GetOutputParametersAsync()` (after reader closed) |
+| `ExecuteReaderAsync` | `StreamingReaderResult` | Yes (SQL Server/PostgreSQL) | `await result.GetOutputParametersAsync()` (after reader closed; returns `null` if none declared) |
 | `StreamAsync` | `IAsyncEnumerable<IDataRecord>` | No | — |
 | `ExecuteScalarAsync<T>` | `(T Value, IReadOnlyDictionary<string, object?> OutputParameters)` | Yes (all providers) | returned in tuple |
 | `ExecuteAsync` | `(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)` | Yes (all providers) | returned in tuple |
@@ -121,20 +120,16 @@ Output parameters are not “returned” the same way on every method. Use this 
 
 Notes:
 
-- Streaming outputs exist only on `ExecuteReaderWithOutputsAsync` because ADO.NET output params are available after the reader is finished/closed.
+- Streaming output params are available only **after** the reader is finished/closed (ADO.NET behavior).
 - Tuple-returning output dictionaries use normalized keys (prefix trimmed): `@NewId` / `:NewId` / `?NewId` → `"NewId"`.
 
 ### Streaming APIs (fastest, lowest memory)
 
-- `ExecuteReaderAsync(...)` → `DbDataReader`
+- `ExecuteReaderAsync(...)` → `StreamingReaderResult`
   - Provider support: **SQL Server, PostgreSQL**
-  - Output parameters: **not returned**
-  - You own reader lifecycle (dispose it).
-
-- `ExecuteReaderWithOutputsAsync(...)` → `StreamingReaderResult`
-  - Provider support: **SQL Server, PostgreSQL**
-  - Output parameters: available only **after** the reader is closed:
+  - Output parameters: available only **after** the reader is closed (and only if declared on `CommandDefinition.Parameters`):
     - `await result.GetOutputParametersAsync()`
+  - Dispose the result to close the reader/command.
 
 - `StreamAsync(...)` → `IAsyncEnumerable<IDataRecord>`
   - Provider support: **SQL Server, PostgreSQL**
@@ -295,7 +290,7 @@ using System.Data;
 using AdoAsync;
 using AdoAsync.Execution;
 
-await using var result = await executor.ExecuteReaderWithOutputsAsync(new CommandDefinition
+await using var result = await executor.ExecuteReaderAsync(new CommandDefinition
 {
     CommandText = "dbo.SelectCustomersAndReturnTotal",
     CommandType = CommandType.StoredProcedure,

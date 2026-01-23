@@ -16,7 +16,6 @@ This provider uses:
 | Feature | Supported | Notes |
 |---|---:|---|
 | Streaming (`ExecuteReaderAsync`, `StreamAsync`) | No | Oracle streaming is blocked to avoid partial refcursor result consumption |
-| Streaming + output params (`ExecuteReaderWithOutputsAsync`) | No | not supported |
 | Buffered single result (`QueryTableAsync`) | Yes | preferred Oracle read path |
 | Buffered multi-result (`QueryTablesAsync`) | Yes | primary multi-result mechanism |
 | Buffered `DataSet` (`ExecuteDataSetAsync`) | Yes | for refcursor procedures it routes through refcursor path |

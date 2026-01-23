@@ -105,7 +105,7 @@ APIs that return streaming sequences:
 ### Do NOT use `IAsyncEnumerable<T>` when:
 
 - You need to return a `List<T>` / `DataTable` / `DataSet` to another layer (buffer instead).
-- You need **output parameters** (use buffered methods, or `ExecuteReaderWithOutputsAsync` where supported).
+- You need **output parameters** (use buffered methods, or `ExecuteReaderAsync` + `GetOutputParametersAsync()` where supported).
 - You need **multi-result** sets (`DataSet` / `QueryTablesAsync`).
 - Provider is **Oracle** (streaming APIs throw unsupported by design).
 - PostgreSQL procedure returns **refcursors** (must use buffered `QueryTablesAsync` / `QueryTableAsync`).
