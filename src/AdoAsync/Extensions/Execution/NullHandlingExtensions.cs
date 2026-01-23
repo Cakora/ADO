@@ -2,7 +2,8 @@ using System;
 
 namespace AdoAsync.Extensions.Execution;
 
-internal static class NullHandlingExtensions
+/// <summary>Helpers for normalizing null/DBNull values during mapping.</summary>
+public static class NullHandlingExtensions
 {
     /// <summary>Return null when the value is DBNull to simplify mapping.</summary>
     /// <param name="value">Value to normalize.</param>

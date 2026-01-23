@@ -3,7 +3,8 @@ using System.Data;
 
 namespace AdoAsync.Extensions.Execution;
 
-internal static class DataSetExtensions
+/// <summary>DataSet conversion helpers.</summary>
+public static class DataSetExtensions
 {
     /// <summary>Convert a DataSet into a MultiResult with optional output parameters.</summary>
     /// <param name="dataSet">Buffered DataSet.</param>

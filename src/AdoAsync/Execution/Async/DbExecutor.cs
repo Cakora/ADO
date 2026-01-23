@@ -341,6 +341,26 @@ public sealed partial class DbExecutor : IDbExecutor
             throw new DbCallerException(validationError);
         }
 
+        if (ShouldUseOracleRefCursorPath(command) || ShouldUsePostgresRefCursorPath(command))
+        {
+            // Refcursor results require special handling; reuse the buffered tables path and then package into a DataSet.
+            var tables = await QueryTablesAsync(command, cancellationToken).ConfigureAwait(false);
+            var refCursorDataSet = new DataSet();
+            foreach (var table in tables)
+            {
+                refCursorDataSet.Tables.Add(table);
+            }
+
+            if (tables.Count > 0 &&
+                tables[0].ExtendedProperties.Contains("OutputParameters") &&
+                tables[0].ExtendedProperties["OutputParameters"] is IReadOnlyDictionary<string, object?> refCursorOutputs)
+            {
+                refCursorDataSet.ExtendedProperties["OutputParameters"] = refCursorOutputs;
+            }
+
+            return refCursorDataSet;
+        }
+
         var (dataSet, outputs) = await ExecuteDataSetInternalAsync(command, cancellationToken).ConfigureAwait(false);
         if (outputs is not null)
         {

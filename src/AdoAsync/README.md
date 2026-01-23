@@ -21,7 +21,10 @@ Caller handling pattern:
 ```csharp
 try
 {
-    var rows = await executor.ExecuteAsync(new CommandDefinition("update dbo.Items set Processed = 1"));
+    var rows = await executor.ExecuteAsync(new CommandDefinition
+    {
+        CommandText = "update dbo.Items set Processed = 1"
+    });
 }
 catch (DbCallerException ex)
 {
@@ -45,6 +48,10 @@ catch (DbCallerException ex)
 
 ## Quick Start
 ```csharp
+using System.Data;
+using AdoAsync;
+using AdoAsync.Execution;
+
 var options = new DbOptions
 {
     DatabaseType = DatabaseType.SqlServer,
@@ -56,9 +63,15 @@ var options = new DbOptions
 
 await using var executor = DbExecutor.Create(options);
 
-var rows = await executor.ExecuteAsync(new CommandDefinition(
-    "update dbo.Items set Processed = 1 where Id = @id",
-    new[] { new DbParameter { Name = "id", DataType = DbDataType.Int32, Value = 42, Direction = ParameterDirection.Input } }));
+var rows = await executor.ExecuteAsync(new CommandDefinition
+{
+    CommandText = "update dbo.Items set Processed = 1 where Id = @id",
+    CommandType = CommandType.Text,
+    Parameters = new[]
+    {
+        new DbParameter { Name = "@id", DataType = DbDataType.Int32, Value = 42, Direction = ParameterDirection.Input }
+    }
+});
 ```
 
 See `IMPLEMENTATION_GUIDE.md` for the full behavior and guardrails.
@@ -91,7 +104,7 @@ public sealed class MyService(IDbExecutorFactory factory)
         };
 
         await using var exec = factory.Create(options);
-        return await exec.ExecuteAsync(new CommandDefinition("select 1"));
+        return await exec.ExecuteAsync(new CommandDefinition { CommandText = "select 1", CommandType = CommandType.Text });
     }
 }
 ```
@@ -141,6 +154,7 @@ Best for high performance and low memory (row-by-row):
 ```csharp
 using System.Data;
 using AdoAsync.Common;
+using AdoAsync.Execution;
 
 await foreach (var customer in executor.QueryAsync(
     new CommandDefinition
@@ -150,7 +164,7 @@ await foreach (var customer in executor.QueryAsync(
     },
     record => new Customer
     {
-        Id = record.Get<long>(0),
+        Id = record.Get<long>(0) ?? 0L,
         Name = record.Get<string>(1)
     }))
 {
@@ -163,6 +177,7 @@ Easy, but buffers all rows (materialized):
 ```csharp
 using System.Data;
 using System.Linq;
+using AdoAsync.Execution;
 
 var tables = await executor.QueryTablesAsync(new CommandDefinition
 {
@@ -276,7 +291,7 @@ await foreach (var customer in executor.QueryAsync(
     },
     record => new Customer
     {
-        Id = record.Get<int>(0),
+        Id = record.Get<int>(0) ?? 0,
         Name = record.Get<string>(1)
     }))
 {
@@ -314,7 +329,7 @@ await foreach (var customer in executor.QueryAsync(
     },
     record => new Customer
     {
-        Id = record.Get<int>(0),
+        Id = record.Get<int>(0) ?? 0,
         Name = record.Get<string>(1)
     }))
 {
@@ -364,7 +379,7 @@ await foreach (var customer in executor.QueryAsync(new CommandDefinition
     CommandType = CommandType.Text
 }, record => new Customer
 {
-    Id = record.Get<long>(0),
+    Id = record.Get<long>(0) ?? 0L,
     Name = record.Get<string>(1)
 }))
 {
@@ -394,6 +409,11 @@ Provider-specific examples:
 - `docs/provider-examples/postgresql-examples.md`
 - `docs/provider-examples/oracle-examples.md`
 - `docs/type-handling.md` (provider type differences and normalization notes)
+- `docs/idbexecutor.md` (full IDbExecutor/DbExecutor documentation)
+- `docs/extensions.md` (extensions inventory + usage)
+- `docs/linq2db.md` (typed bulk copy)
+- `docs/bulk-update.md` (bulk update/upsert pattern)
+- `docs/what-to-use.md` (recommended “use only these” API guide)
 
 ## Integration Tests (Run Later)
 The integration tests are skipped by default because they require a live database.

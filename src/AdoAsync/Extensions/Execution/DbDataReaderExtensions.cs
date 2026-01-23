@@ -6,7 +6,8 @@ using System.Threading;
 
 namespace AdoAsync.Extensions.Execution;
 
-internal static class DbDataReaderExtensions
+/// <summary>DbDataReader helpers for streaming and materialization.</summary>
+public static class DbDataReaderExtensions
 {
     /// <summary>Materialize all rows from a reader into a list using the provided mapper.</summary>
     /// <param name="reader">Reader to enumerate.</param>

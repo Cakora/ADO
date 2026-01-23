@@ -28,7 +28,9 @@ public interface IDbExecutor : IAsyncDisposable
     /// <summary>Executes a non-query command (INSERT/UPDATE/DELETE) and returns the affected row count (all providers).</summary>
     /// <remarks>
     /// Use this for commands where the database returns rows-affected via ExecuteNonQuery.
-    /// Output parameters are supported on this buffered path and are available on the executed command.
+    /// Output parameters are not returned by this method. If you need output parameters, use a buffered method
+    /// such as <see cref="QueryTableAsync"/> / <see cref="ExecuteDataSetAsync"/> (and read outputs from ExtendedProperties),
+    /// or use <see cref="ExecuteReaderWithOutputsAsync"/> for streaming (SQL Server/PostgreSQL only).
     /// </remarks>
     ValueTask<int> ExecuteAsync(CommandDefinition command, CancellationToken cancellationToken = default);
 

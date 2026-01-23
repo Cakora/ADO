@@ -6,7 +6,7 @@ using System.Data;
 namespace AdoAsync.Extensions.Execution;
 
 /// <summary>Mapping helpers for buffered multi-result shapes.</summary>
-internal static class MultiResultMapExtensions
+public static class MultiResultMapExtensions
 {
     /// <summary>Map all tables in a DataSet to a list of mapped rows using a single mapper.</summary>
     /// <param name="dataSet">Buffered DataSet.</param>

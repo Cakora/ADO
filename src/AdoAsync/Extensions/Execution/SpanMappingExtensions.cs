@@ -3,7 +3,7 @@ using System;
 namespace AdoAsync.Extensions.Execution;
 
 /// <summary>Span-based mapping helpers for array-backed data.</summary>
-internal static class SpanMappingExtensions
+public static class SpanMappingExtensions
 {
     /// <summary>Project an input array to an output array using a span-based loop.</summary>
     /// <param name="source">Source array.</param>

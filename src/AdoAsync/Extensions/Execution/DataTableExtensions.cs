@@ -3,7 +3,8 @@ using System.Data;
 
 namespace AdoAsync.Extensions.Execution;
 
-internal static class DataTableExtensions
+/// <summary>DataTable mapping helpers.</summary>
+public static class DataTableExtensions
 {
     /// <summary>Project DataRow items to a list using the provided mapper.</summary>
     /// <param name="table">Table to project.</param>

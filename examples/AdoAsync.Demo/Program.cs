@@ -1,4 +1,6 @@
+using System.Data;
 using AdoAsync;
+using AdoAsync.Execution;
 
 #region Configuration
 var provider = Environment.GetEnvironmentVariable("DB_PROVIDER");
@@ -13,18 +15,36 @@ if (string.IsNullOrWhiteSpace(provider) || string.IsNullOrWhiteSpace(connectionS
 #endregion
 
 #region Demo
-DbProvider dbProvider = provider.Trim().ToLowerInvariant() switch
+DatabaseType databaseType = provider.Trim().ToLowerInvariant() switch
 {
-    "mssql" or "sqlserver" => DbProvider.SqlServer,
-    "postgres" or "postgresql" => DbProvider.PostgreSql,
-    "oracle" => DbProvider.Oracle,
+    "mssql" or "sqlserver" => DatabaseType.SqlServer,
+    "postgres" or "postgresql" => DatabaseType.PostgreSql,
+    "oracle" => DatabaseType.Oracle,
     _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, "Unknown provider. Use mssql | postgres | oracle."),
 };
 
-var client = new AdoAsyncClient(connectionString, dbProvider);
+var options = new DbOptions
+{
+    DatabaseType = databaseType,
+    ConnectionString = connectionString,
+    CommandTimeoutSeconds = 30,
+    EnableValidation = true,
+    EnableRetry = false
+};
 
-var now = await client.ExecuteScalarAsync<DateTime>(
-    new CommandDefinition("SELECT CURRENT_TIMESTAMP"));
+await using var executor = DbExecutor.Create(options);
+
+var commandText = databaseType switch
+{
+    DatabaseType.Oracle => "SELECT CURRENT_TIMESTAMP FROM dual",
+    _ => "SELECT CURRENT_TIMESTAMP"
+};
+
+var now = await executor.ExecuteScalarAsync<DateTime>(new CommandDefinition
+{
+    CommandText = commandText,
+    CommandType = CommandType.Text
+});
 
 Console.WriteLine($"Database time: {now:O}");
 #endregion

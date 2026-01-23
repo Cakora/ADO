@@ -4,7 +4,7 @@ using System.Data;
 namespace AdoAsync.Extensions.Execution;
 
 /// <summary>Normalization helpers to make DataRow/DataReader values LINQ-friendly across providers.</summary>
-internal static class ValueNormalizationExtensions
+public static class ValueNormalizationExtensions
 {
     /// <summary>Normalize a raw value from a DataRow or IDataRecord based on the declared DbDataType.</summary>
     /// <param name="value">Value to normalize.</param>
