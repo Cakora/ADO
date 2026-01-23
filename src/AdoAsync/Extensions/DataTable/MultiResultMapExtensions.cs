@@ -12,6 +12,24 @@ public static class MultiResultMapExtensions
     /// <param name="dataSet">Buffered DataSet.</param>
     /// <param name="map">Row mapper applied to every table.</param>
     /// <returns>Mapped rows per table.</returns>
+    /// <remarks>
+    /// Purpose:
+    /// Convert buffered multi-result tables into typed collections for repeated access.
+    ///
+    /// When to use:
+    /// - Oracle / refcursor / buffered multi-result paths
+    /// - When repeated filtering/grouping is required after buffering
+    ///
+    /// When NOT to use:
+    /// - Streaming-first paths (SQL Server/PostgreSQL) where one-pass processing is sufficient
+    /// - Very large result sets (high memory usage)
+    ///
+    /// Lifetime / Ownership:
+    /// - Source owner: caller owns <paramref name="dataSet"/> and its tables.
+    /// - Result owner: caller owns the returned mapped collections.
+    /// - Source disposal: dispose/release tables after mapping; do not store DataTable references long-term.
+    /// - Result release: release by dropping references to returned collections (GC).
+    /// </remarks>
     public static IReadOnlyList<List<T>> MapTables<T>(this DataSet dataSet, Func<DataRow, T> map)
     {
         if (dataSet is null) throw new ArgumentNullException(nameof(dataSet));
@@ -54,6 +72,24 @@ public static class MultiResultMapExtensions
     /// </code>
     /// </example>
     /// <returns>Mapped collections per table.</returns>
+    /// <remarks>
+    /// Purpose:
+    /// Map buffered tables into caller-chosen collection types while avoiding intermediate allocations.
+    ///
+    /// When to use:
+    /// - You need arrays/immutable/read-only collections after buffering
+    /// - You want to control collection shape (memory vs API surface)
+    ///
+    /// When NOT to use:
+    /// - Streaming scenarios
+    /// - Very large result sets (high memory usage)
+    ///
+    /// Lifetime / Ownership:
+    /// - Source owner: caller owns <paramref name="dataSet"/> and its tables.
+    /// - Result owner: caller owns the returned collections.
+    /// - Source disposal: dispose/release tables after mapping.
+    /// - Result release: release by dropping references to returned collections (GC).
+    /// </remarks>
     public static IReadOnlyList<TCollection> MapTables<T, TCollection>(this DataSet dataSet, Func<DataRow, T> map, Func<int, TCollection> collectionFactory)
         where TCollection : ICollection<T>
     {
@@ -81,6 +117,23 @@ public static class MultiResultMapExtensions
     /// <param name="multiResult">Buffered multi-result.</param>
     /// <param name="mappers">Row mappers aligned to tables.</param>
     /// <returns>Mapped rows per table.</returns>
+    /// <remarks>
+    /// Purpose:
+    /// Map buffered multi-result tables using different mappers per table (aligned by index).
+    ///
+    /// When to use:
+    /// - Procedures returning heterogeneous result sets (different row shapes)
+    ///
+    /// When NOT to use:
+    /// - When a single mapper applies to all tables (use the DataSet overload)
+    /// - Streaming scenarios (SQL Server/PostgreSQL)
+    ///
+    /// Lifetime / Ownership:
+    /// - Source owner: caller owns <paramref name="multiResult"/> and its tables.
+    /// - Result owner: caller owns the returned mapped collections.
+    /// - Source disposal: dispose/release tables after mapping.
+    /// - Result release: release by dropping references to returned collections (GC).
+    /// </remarks>
     public static IReadOnlyList<List<T>> MapTables<T>(this MultiResult multiResult, params Func<DataRow, T>[] mappers)
     {
         if (multiResult is null) throw new ArgumentNullException(nameof(multiResult));
@@ -117,7 +170,7 @@ public static class MultiResultMapExtensions
     /// <typeparam name="T">Mapped row type.</typeparam>
     /// <typeparam name="TCollection">Collection type (must accept Add).</typeparam>
     /// <example>
-    /// Map to arrays with per-table mappers:
+    /// Map to arrays:
     /// <code>
     /// var arrays = multiResult.MapTables(
     ///     size => new Foo[size],
@@ -144,6 +197,23 @@ public static class MultiResultMapExtensions
     /// </code>
     /// </example>
     /// <returns>Mapped collections per table.</returns>
+    /// <remarks>
+    /// Purpose:
+    /// Map buffered multi-result tables into caller-chosen collections with one allocation per table.
+    ///
+    /// When to use:
+    /// - You need arrays/immutable/read-only collections after buffering
+    ///
+    /// When NOT to use:
+    /// - Streaming scenarios
+    /// - When you only need one table (use buffered single-table APIs)
+    ///
+    /// Lifetime / Ownership:
+    /// - Source owner: caller owns <paramref name="multiResult"/> and its tables.
+    /// - Result owner: caller owns the returned collections.
+    /// - Source disposal: dispose/release tables after mapping.
+    /// - Result release: release by dropping references to returned collections (GC).
+    /// </remarks>
     public static IReadOnlyList<TCollection> MapTables<T, TCollection>(this MultiResult multiResult, Func<int, TCollection> collectionFactory, params Func<DataRow, T>[] mappers)
         where TCollection : ICollection<T>
     {
@@ -186,6 +256,23 @@ public static class MultiResultMapExtensions
     /// var arrays = dataSet.MapTablesToArrays(row => new Foo(row.Field&lt;int&gt;("Id")));
     /// </code>
     /// </example>
+    /// <remarks>
+    /// Purpose:
+    /// Convert buffered tables into arrays to minimize per-row overhead and reduce list growth allocations.
+    ///
+    /// When to use:
+    /// - You know results are fully buffered and you want compact representation
+    ///
+    /// When NOT to use:
+    /// - When you need incremental growth or unknown counts (prefer List)
+    /// - Streaming scenarios
+    ///
+    /// Lifetime / Ownership:
+    /// - Source owner: caller owns <paramref name="dataSet"/> and its tables.
+    /// - Result owner: caller owns the returned arrays.
+    /// - Source disposal: dispose/release tables after mapping.
+    /// - Result release: release by dropping references to arrays (GC).
+    /// </remarks>
     public static IReadOnlyList<T[]> MapTablesToArrays<T>(this DataSet dataSet, Func<DataRow, T> map)
     {
         if (dataSet is null) throw new ArgumentNullException(nameof(dataSet));
@@ -219,6 +306,23 @@ public static class MultiResultMapExtensions
     ///     row => new Foo(row.Field&lt;int&gt;("Id2")));
     /// </code>
     /// </example>
+    /// <remarks>
+    /// Purpose:
+    /// Convert buffered MultiResult tables into arrays for compact, fast iteration.
+    ///
+    /// When to use:
+    /// - Buffered multi-result (Oracle/refcursor) when you want minimal overhead per row
+    ///
+    /// When NOT to use:
+    /// - When you need mutable growth (prefer List)
+    /// - Streaming scenarios
+    ///
+    /// Lifetime / Ownership:
+    /// - Source owner: caller owns <paramref name="multiResult"/> and its tables.
+    /// - Result owner: caller owns the returned arrays.
+    /// - Source disposal: dispose/release tables after mapping.
+    /// - Result release: release by dropping references to arrays (GC).
+    /// </remarks>
     public static IReadOnlyList<T[]> MapTablesToArrays<T>(this MultiResult multiResult, params Func<DataRow, T>[] mappers)
     {
         if (multiResult is null) throw new ArgumentNullException(nameof(multiResult));
@@ -242,6 +346,39 @@ public static class MultiResultMapExtensions
                 array[rowIndex] = mapper(table.Rows[rowIndex]);
             }
             results.Add(array);
+        }
+
+        return results;
+    }
+
+    /// <summary>Map tables in a MultiResult to immutable arrays.</summary>
+    /// <remarks>
+    /// Purpose:
+    /// Return immutable, array-backed collections after buffering to prevent accidental mutation.
+    ///
+    /// When to use:
+    /// - You want immutability guarantees for downstream code
+    ///
+    /// When NOT to use:
+    /// - When mutability is fine (extra copy/build cost)
+    /// - Streaming scenarios
+    ///
+    /// Lifetime / Ownership:
+    /// - Source owner: caller owns <paramref name="multiResult"/> and its tables.
+    /// - Result owner: caller owns the returned immutable arrays.
+    /// - Source disposal: dispose/release tables after mapping.
+    /// - Result release: release by dropping references to immutable arrays (GC).
+    /// </remarks>
+    public static IReadOnlyList<ImmutableArray<T>> MapTablesToImmutableArrays<T>(this MultiResult multiResult, params Func<DataRow, T>[] mappers)
+    {
+        if (multiResult is null) throw new ArgumentNullException(nameof(multiResult));
+        if (mappers is null) throw new ArgumentNullException(nameof(mappers));
+
+        var arrays = multiResult.MapTablesToArrays(mappers);
+        var results = new List<ImmutableArray<T>>(arrays.Count);
+        for (var i = 0; i < arrays.Count; i++)
+        {
+            results.Add(ImmutableArray.Create(arrays[i]));
         }
 
         return results;

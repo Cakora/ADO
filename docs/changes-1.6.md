@@ -48,8 +48,8 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 
 ## Changed (Normalization helpers)
 
-- `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs:100` `public static object? NormalizeByType(this object? value, DbDataType dataType)`
-- `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs:115` `public static T? NormalizeAsNullable<T>(this object? value, DbDataType dataType) where T : struct`
+- `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs:154` `public static object? NormalizeByType(this object? value, DbDataType dataType)`
+- `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs:180` `public static T? NormalizeAsNullable<T>(this object? value, DbDataType dataType) where T : struct`
 
 ## Performance / Allocation
 
@@ -62,12 +62,15 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 
 - Enforced lifetime/ownership notes on conversion methods:
   - `src/AdoAsync/Extensions/DataReader/DbDataReaderExtensions.cs:34` `StreamRecordsAsync(...)`
-  - `src/AdoAsync/Extensions/DataTable/DataTableExtensions.cs:32` `ToList<T>(...)`
-  - `src/AdoAsync/Extensions/DataTable/DataTableExtensions.cs:68` `ToArray<T>(...)`
-  - `src/AdoAsync/Extensions/AsyncEnumerable/AsyncEnumerableMaterializerExtensions.cs:44` `ToListAsync<T>(...)`
-  - `src/AdoAsync/Extensions/AsyncEnumerable/AsyncEnumerableMaterializerExtensions.cs:75` `ToArrayAsync<T>(...)`
-  - `src/AdoAsync/Extensions/AsyncEnumerable/AsyncEnumerableMaterializerExtensions.cs:98` `ToLookupAsync<TSource, TKey>(...)`
-  - `src/AdoAsync/Extensions/AsyncEnumerable/AsyncEnumerableMaterializerExtensions.cs:129` `ToFrozenDictionaryAsync<TSource, TKey, TValue>(...)`
+  - `src/AdoAsync/Extensions/DataTable/DataTableExtensions.cs:31` `ToList<T>(...)`
+  - `src/AdoAsync/Extensions/DataTable/DataTableExtensions.cs:66` `ToArray<T>(...)`
+  - `src/AdoAsync/Extensions/AsyncEnumerable/AsyncEnumerableMaterializerExtensions.cs:43` `ToListAsync<T>(...)`
+  - `src/AdoAsync/Extensions/AsyncEnumerable/AsyncEnumerableMaterializerExtensions.cs:76` `ToArrayAsync<T>(...)`
+  - `src/AdoAsync/Extensions/AsyncEnumerable/AsyncEnumerableMaterializerExtensions.cs:102` `ToFrozenDictionaryAsync<TSource, TKey, TValue>(...)`
+  - `src/AdoAsync/Extensions/AsyncEnumerable/AsyncEnumerableMaterializerExtensions.cs:147` `ToLookupAsync<TSource, TKey, TElement>(...)`
+  - `Documentation/ConversionGuidelines.md` (rules + ownership + prompt template)
+  - `Documentation/RulesCheatSheet.md` (one-page rules)
+  - `Documentation/CodexPromptTemplate.md` (reusable Codex prompt)
 
 ## Refactor / Structure
 
@@ -77,10 +80,27 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
   - `src/AdoAsync/Execution/Async/DbExecutor.Bulk.cs` (bulk import)
   - `src/AdoAsync/Execution/Async/DbExecutor.Infrastructure.cs` (connection/validation/retry/error helpers)
   - `src/AdoAsync/Execution/Async/DbExecutor.RefCursor.cs` (Oracle/PostgreSQL refcursor paths)
+- Extensions reorganized into category folders under `src/AdoAsync/Extensions/` (namespaces remain `AdoAsync.Extensions.Execution`):
+  - `src/AdoAsync/Extensions/DataReader/*`
+  - `src/AdoAsync/Extensions/DataTable/*`
+  - `src/AdoAsync/Extensions/AsyncEnumerable/*`
+  - `src/AdoAsync/Extensions/Collections/*`
+  - `src/AdoAsync/Extensions/Normalization/*`
+
+## Moved
+
+- `src/AdoAsync/Extensions/Execution/DbDataReaderExtensions.cs` → `src/AdoAsync/Extensions/DataReader/DbDataReaderExtensions.cs`
+- `src/AdoAsync/Extensions/Execution/DataTableExtensions.cs` → `src/AdoAsync/Extensions/DataTable/DataTableExtensions.cs`
+- `src/AdoAsync/Extensions/Execution/DataSetExtensions.cs` → `src/AdoAsync/Extensions/DataTable/DataSetExtensions.cs`
+- `src/AdoAsync/Extensions/Execution/MultiResultMapExtensions.cs` → `src/AdoAsync/Extensions/DataTable/MultiResultMapExtensions.cs`
+- `src/AdoAsync/Extensions/Execution/SpanMappingExtensions.cs` → `src/AdoAsync/Extensions/Collections/SpanMappingExtensions.cs`
+- `src/AdoAsync/Extensions/Execution/ValueNormalizationExtensions.cs` → `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs`
+- `src/AdoAsync/Extensions/Execution/NullHandlingExtensions.cs` → `src/AdoAsync/Extensions/Normalization/NullHandlingExtensions.cs`
 
 ## Removed
 
 - `src/AdoAsync/Execution/Async/DbExecutor.Streaming.cs` (moved into `DbExecutor.cs`)
+- `src/AdoAsync/Execution/Async/DbExecutor.ExecutionAndQuery.cs` (duplicate partial removed)
 - `src/AdoAsync/Execution/OutputParameterConverter.cs` (renamed/replaced by internal normalizer; public API remains `NormalizeByType`).
 - `src/AdoAsync/Extensions/Execution/DataTableOutputExtensions.cs` (removed)
 - `src/AdoAsync/Extensions/Execution/DataSetOutputExtensions.cs` (removed)

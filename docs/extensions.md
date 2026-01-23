@@ -13,13 +13,18 @@ Only a small subset is meant to be used directly by application code.
 
 ## Why Some Extensions Were Internal
 
-Several extensions in `AdoAsync.Extensions.Execution` were originally marked `internal` intentionally:
+Several extensions in `AdoAsync.Extensions.Execution` were originally marked `internal` intentionally (and are still intended primarily for mapping/normalization, not core database access):
 
 - They are implementation helpers (performance + allocation control).
 - Keeping them internal prevents the public API from growing with methods we may want to change later.
 
 If you are using AdoAsync as a library consumer, you typically **use the public `IDbExecutor` / `DbExecutor` methods**.
 Some mapping helpers are also exposed as extensions so you can map `DataTable` / `DataSet` results without writing `for` loops.
+
+Note: the code is organized into category folders under `src/AdoAsync/Extensions/` (DataReader/DataTable/AsyncEnumerable/Collections/Normalization), but the extension namespaces remain `AdoAsync.Extensions.Execution` for discoverability.
+
+See also:
+- `docs/conversion-extensions.md` (how to use the conversion extensions safely)
 
 ### 1) Dependency Injection
 
