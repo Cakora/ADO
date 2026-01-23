@@ -54,25 +54,9 @@ builder.Services.AddAdoAsync("Main", new DbOptions
 builder.Services.AddAdoAsyncExecutor("Main");
 ```
 
-### 2) Output parameter retrieval
+### 2) Output parameters
 
-File: `src/AdoAsync/Extensions/Execution/DataTableOutputExtensions.cs`
-
-Namespace: `AdoAsync.Extensions.Execution`
-
-Methods:
-
-- `GetOutputParameters(this DataTable table)`
-- `GetOutputParameters(this DataSet dataSet)`
-
-Example:
-
-```csharp
-using AdoAsync.Extensions.Execution;
-
-var table = await executor.QueryTableAsync(command);
-var outputs = table.GetOutputParameters();
-```
+Output parameters are returned from `IDbExecutor` methods via tuples (no DataTable/DataSet output extensions).
 
 ### 3) Result-set typed getters (recommended for streaming)
 
@@ -249,11 +233,14 @@ Use `QueryTableAsync` + `DataTableExtensions.ToList(...)`:
 using System.Data;
 using AdoAsync.Extensions.Execution;
 
-var table = await executor.QueryTableAsync(new CommandDefinition
+(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters) tableResult =
+    await executor.QueryTableAsync(new CommandDefinition
 {
     CommandText = "select Id, Name from dbo.Customers",
     CommandType = CommandType.Text
 });
+
+DataTable table = tableResult.Table;
 
 var customers = table.ToList(row => new Customer(
     Id: row.Field<int>("Id"),
@@ -265,7 +252,7 @@ var customers = table.ToList(row => new Customer(
 Use `DbExecutor.QueryAsync<T>(DataRow map)` which internally uses a fast indexed loop (no LINQ allocations):
 
 ```csharp
-var customers = await executor.QueryAsync(
+(List<Customer> Rows, IReadOnlyDictionary<string, object?> OutputParameters) result = await executor.QueryAsync(
     new CommandDefinition
     {
         CommandText = "select Id, Name from dbo.Customers",
@@ -274,6 +261,8 @@ var customers = await executor.QueryAsync(
     row => new Customer(
         Id: row.Field<int>("Id"),
         Name: row.Field<string>("Name")!));
+
+var customers = result.Rows;
 ```
 
 When to use:
@@ -292,11 +281,14 @@ Use `ExecuteDataSetAsync` + `DataTableExtensions.ToList(...)` per table:
 using System.Data;
 using AdoAsync.Extensions.Execution;
 
-var dataSet = await executor.ExecuteDataSetAsync(new CommandDefinition
+(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters) dataSetResult =
+    await executor.ExecuteDataSetAsync(new CommandDefinition
 {
     CommandText = "dbo.GetCustomerAndOrders",
     CommandType = CommandType.StoredProcedure
 });
+
+DataSet dataSet = dataSetResult.DataSet;
 
 var customersTable = dataSet.Tables[0];
 var ordersTable = dataSet.Tables[1];
@@ -310,31 +302,13 @@ var orders = ordersTable.ToList(row =>
 
 ### 3.1 DataSet → “List of tables” → “List<T> per table”
 
-If you want to treat a `DataSet` as a list of tables first:
+If you want to map all tables with the same row mapper, use `MultiResultMapExtensions.MapTables(...)` instead of manual loops:
 
 ```csharp
-using System.Data;
 using AdoAsync.Extensions.Execution;
 
-var dataSet = await executor.ExecuteDataSetAsync(new CommandDefinition
-{
-    CommandText = "dbo.GetCustomerAndOrders",
-    CommandType = CommandType.StoredProcedure
-});
-
-// Step 1: DataSet -> List<DataTable>
-var tables = new List<DataTable>(dataSet.Tables.Count);
-foreach (DataTable t in dataSet.Tables) tables.Add(t);
-
-// Step 2: DataTable -> List<T> for each table (same mapper per table)
-var mapped = new List<List<Customer>>(tables.Count);
-for (var i = 0; i < tables.Count; i++)
-{
-    mapped.Add(tables[i].ToList(row =>
-        new Customer(row.Field<int>("Id"), row.Field<string>("Name")!)));
-}
-
-// mapped[0] is customers from first table, mapped[1] is customers from second table, etc.
+IReadOnlyList<List<Customer>> mapped = dataSet.MapTables(row =>
+    new Customer(row.Field<int>("Id"), row.Field<string>("Name")!));
 ```
 
 ### 4) Maximum read performance (buffered) → arrays
@@ -344,7 +318,9 @@ If the next layer benefits from arrays (fastest iteration), you can convert list
 ```csharp
 using AdoAsync.Extensions.Execution;
 
-var table = await executor.QueryTableAsync(new CommandDefinition { CommandText = "select Id, Name from dbo.Customers" });
+(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters) tableResult =
+    await executor.QueryTableAsync(new CommandDefinition { CommandText = "select Id, Name from dbo.Customers" });
+var table = tableResult.Table;
 
 var customers = table
     .ToList(row => new Customer(row.Field<int>("Id"), row.Field<string>("Name")!))
@@ -356,7 +332,8 @@ Example: DataSet where every table maps to the *same* output type:
 ```csharp
 using AdoAsync.Extensions.Execution;
 
-var dataSet = await executor.ExecuteDataSetAsync(new CommandDefinition { CommandText = "..." });
+var dataSetResult = await executor.ExecuteDataSetAsync(new CommandDefinition { CommandText = "..." });
+var dataSet = dataSetResult.DataSet;
 var arrays = dataSet.MapTablesToArrays(row => row.Field<int>(0));
 ```
 
@@ -381,11 +358,14 @@ await foreach (var record in executor.StreamAsync(new CommandDefinition { Comman
 Public way to use (stream + map with the new extension added in 1.5):
 
 ```csharp
+using AdoAsync.Common;
 using AdoAsync.Execution;
 
-await foreach (var row in executor.QueryAsync(
+await foreach (Customer customer in executor.QueryAsync(
     new CommandDefinition { CommandText = "select Id, Name from dbo.Customers" },
-    record => new Customer(record.GetInt32(0), record.GetString(1))))
+    record => new Customer(
+        record.Get<int>(0) ?? 0,
+        record.Get<string>(1) ?? "")))
 {
 }
 ```
@@ -399,15 +379,17 @@ Internal method:
 Public way to use (get `DataTable`):
 
 ```csharp
-var table = await executor.QueryTableAsync(new CommandDefinition { CommandText = "select ..." });
+var tableResult = await executor.QueryTableAsync(new CommandDefinition { CommandText = "select ..." });
+var table = tableResult.Table;
 ```
 
 Public way to use (get `List<T>` directly, uses the internal fast mapping):
 
 ```csharp
-var customers = await executor.QueryAsync(
+var customersResult = await executor.QueryAsync(
     new CommandDefinition { CommandText = "select Id, Name from dbo.Customers" },
     row => new Customer(row.Field<int>("Id"), row.Field<string>("Name")!));
+var customers = customersResult.Rows;
 ```
 
 Where NOT to use this:
@@ -425,14 +407,18 @@ Public way to use (get `DataSet` + output parameters):
 ```csharp
 using AdoAsync.Extensions.Execution;
 
-var dataSet = await executor.ExecuteDataSetAsync(new CommandDefinition
+(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters) dataSetResult =
+    await executor.ExecuteDataSetAsync(new CommandDefinition
 {
     CommandText = "dbo.GetCustomerAndOrders",
     CommandType = CommandType.StoredProcedure
 });
 
-var outputs = dataSet.GetOutputParameters(); // IReadOnlyDictionary<string, object?>?
+var dataSet = dataSetResult.DataSet;
+var outputs = dataSetResult.OutputParameters;
 ```
+
+For `QueryTablesAsync` (DbExecutor-only), outputs are not returned because it only returns tables; use `ExecuteDataSetAsync` / `QueryTableAsync` if you need outputs.
 
 When to use DataSet:
 
@@ -443,16 +429,19 @@ When NOT to use DataSet:
 
 - For large single-result reads where streaming is enough (use `StreamAsync` / `QueryAsync<T>`)
 
-Public way to convert to `MultiResult` (consumer-side equivalent of the internal helper):
+Public way to convert to `MultiResult` (if you use `MultiResult` in your app code):
 
 ```csharp
 using AdoAsync.Extensions.Execution;
 
-var outputs = dataSet.GetOutputParameters();
-var tables = new List<DataTable>(dataSet.Tables.Count);
-foreach (DataTable t in dataSet.Tables) tables.Add(t);
+(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters) dataSetResult =
+    await executor.ExecuteDataSetAsync(new CommandDefinition
+    {
+        CommandText = "dbo.GetCustomerAndOrders",
+        CommandType = CommandType.StoredProcedure
+    });
 
-var multi = new MultiResult { Tables = tables, OutputParameters = outputs };
+MultiResult multi = dataSetResult.DataSet.ToMultiResult(dataSetResult.OutputParameters);
 ```
 
 ### `MultiResultMapExtensions` (fast mapping patterns for buffered multi-results)
@@ -462,46 +451,18 @@ Internal methods (examples):
 - `dataSet.MapTables(...)` → map each table to list/collection
 - `multiResult.MapTablesToArrays(...)` → fastest mapping to arrays
 
-Public way to use (consumer-side equivalent mapping):
+Public way to use (no manual loops):
 
 ```csharp
-var dataSet = await executor.ExecuteDataSetAsync(new CommandDefinition { CommandText = "..." });
+using AdoAsync.Extensions.Execution;
 
-// Example: map first table to a list (fast loop, no LINQ required)
-var table0 = dataSet.Tables[0];
-var list = new List<Customer>(table0.Rows.Count);
-for (var i = 0; i < table0.Rows.Count; i++)
-{
-    var row = table0.Rows[i];
-    list.Add(new Customer(row.Field<int>("Id"), row.Field<string>("Name")!));
-}
-```
+// Map every table to a List<T> using a single mapper
+IReadOnlyList<List<Customer>> perTableLists = dataSet.MapTables(row =>
+    new Customer(row.Field<int>("Id"), row.Field<string>("Name")!));
 
-More detailed multi-table mapping example:
-
-```csharp
-var dataSet = await executor.ExecuteDataSetAsync(new CommandDefinition
-{
-    CommandText = "dbo.GetCustomerAndOrders",
-    CommandType = CommandType.StoredProcedure
-});
-
-var customerRows = dataSet.Tables[0];
-var orderRows = dataSet.Tables[1];
-
-var customers = new Customer[customerRows.Rows.Count];
-for (var i = 0; i < customerRows.Rows.Count; i++)
-{
-    var row = customerRows.Rows[i];
-    customers[i] = new Customer(row.Field<int>("Id"), row.Field<string>("Name")!);
-}
-
-var orders = new Order[orderRows.Rows.Count];
-for (var i = 0; i < orderRows.Rows.Count; i++)
-{
-    var row = orderRows.Rows[i];
-    orders[i] = new Order(row.Field<int>("Id"), row.Field<int>("CustomerId"));
-}
+// Fastest buffered mapping: map every table to an array
+IReadOnlyList<Customer[]> perTableArrays = dataSet.MapTablesToArrays(row =>
+    new Customer(row.Field<int>("Id"), row.Field<string>("Name")!));
 ```
 
 ### `SpanMappingExtensions` (low-allocation array projection)
@@ -510,12 +471,13 @@ Internal method:
 
 - `sourceArray.MapToArray(map)` (span-based loop)
 
-Public way to use (consumer-side equivalent):
+Public way to use:
 
 ```csharp
-var source = new[] { 1, 2, 3 };
-var dest = new int[source.Length];
-for (var i = 0; i < source.Length; i++) dest[i] = source[i] * 10;
+using AdoAsync.Extensions.Execution;
+
+int[] source = new[] { 1, 2, 3 };
+int[] dest = source.MapToArray(x => x * 10);
 ```
 
 ### `ValueNormalizationExtensions` (normalize provider-returned scalars)
@@ -545,9 +507,9 @@ Example (output parameter normalization happens automatically on buffered path):
 
 ```csharp
 using System.Data;
-using AdoAsync.Extensions.Execution;
 
-var table = await executor.QueryTableAsync(new CommandDefinition
+(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters) result =
+    await executor.QueryTableAsync(new CommandDefinition
 {
     CommandText = "dbo.ProcWithOutputs",
     CommandType = CommandType.StoredProcedure,
@@ -557,9 +519,8 @@ var table = await executor.QueryTableAsync(new CommandDefinition
     }
 });
 
-// outputs["flag"] is already normalized (ex: 0/1 -> false/true when possible)
-var outputs = table.GetOutputParameters();
-var flag = (bool?)outputs?["flag"];
+// result.OutputParameters["flag"] is already normalized (ex: 0/1 -> false/true when possible)
+var flag = (bool?)result.OutputParameters["flag"];
 ```
 
 ### `NullHandlingExtensions` (null/DBNull helper behavior)

@@ -121,6 +121,7 @@ public sealed class OracleProvider : IDbProvider
     #region Internal Helpers
     internal static IReadOnlyList<DataTable> ReadRefCursorResults(DbCommand command)
     {
+        #region Refcursor
         var tables = new List<DataTable>();
         // Oracle exposes result sets via output refcursor parameters.
         foreach (OracleParameter parameter in command.Parameters)
@@ -142,6 +143,7 @@ public sealed class OracleProvider : IDbProvider
         }
 
         return tables;
+        #endregion
     }
     #endregion
 }

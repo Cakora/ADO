@@ -60,6 +60,8 @@ public sealed class StreamingReaderResult : IAsyncDisposable, IDisposable
         }
         _disposed = true;
         Reader.Dispose();
+
+        _outputs ??= ParameterHelper.ExtractOutputParameters(_command, _declaredParameters);
         _command.Dispose();
     }
 
@@ -72,6 +74,8 @@ public sealed class StreamingReaderResult : IAsyncDisposable, IDisposable
         }
         _disposed = true;
         await Reader.DisposeAsync().ConfigureAwait(false);
+
+        _outputs ??= ParameterHelper.ExtractOutputParameters(_command, _declaredParameters);
         await _command.DisposeAsync().ConfigureAwait(false);
     }
 }

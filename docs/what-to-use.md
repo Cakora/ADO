@@ -27,7 +27,9 @@ var options = new DbOptions
 };
 
 await using var executor = DbExecutor.Create(options);
-var rows = await executor.ExecuteAsync(new CommandDefinition { CommandText = "select 1", CommandType = CommandType.Text });
+(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters) ping =
+    await executor.ExecuteAsync(new CommandDefinition { CommandText = "select 1", CommandType = CommandType.Text });
+var rows = ping.RowsAffected;
 ```
 
 ### B) DI (recommended for apps)
@@ -83,45 +85,46 @@ Do not use streaming when:
 
 Use:
 
-- `IDbExecutor.QueryTableAsync(...)` → `DataTable`
-- `AdoAsync.Extensions.Execution.OutputParameterExtensions.GetOutputParameters(table)`
+- `IDbExecutor.QueryTableAsync(...)` → `(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)`
 
 ```csharp
-using AdoAsync.Extensions.Execution;
+(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters) result =
+    await executor.QueryTableAsync(new CommandDefinition { CommandText = "select Id, Name from dbo.Customers" });
 
-var table = await executor.QueryTableAsync(new CommandDefinition { CommandText = "select Id, Name from dbo.Customers" });
-var outputs = table.GetOutputParameters(); // null if none
+var table = result.Table;
+var outputs = result.OutputParameters;
 ```
 
 ### C) Buffered List<T> (all providers)
 
 Use:
 
-- `IDbExecutor.QueryAsync<T>(..., Func<DataRow,T> map)` → `List<T>`
+- `IDbExecutor.QueryAsync<T>(..., Func<DataRow,T> map)` → `(List<T> Rows, IReadOnlyDictionary<string, object?> OutputParameters)`
 
 ```csharp
-var customers = await executor.QueryAsync(
+(List<Customer> Rows, IReadOnlyDictionary<string, object?> OutputParameters) result = await executor.QueryAsync(
     new CommandDefinition { CommandText = "select Id, Name from dbo.Customers" },
     row => new Customer(row.Field<int>("Id"), row.Field<string>("Name")!));
+
+var customers = result.Rows;
 ```
 
 ### D) Buffered multi-result DataSet (all providers)
 
 Use:
 
-- `IDbExecutor.ExecuteDataSetAsync(...)` → `DataSet`
-- `OutputParameterExtensions.GetOutputParameters(dataSet)`
+- `IDbExecutor.ExecuteDataSetAsync(...)` → `(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)`
 
 ```csharp
-using AdoAsync.Extensions.Execution;
-
-var dataSet = await executor.ExecuteDataSetAsync(new CommandDefinition
+(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters) result =
+    await executor.ExecuteDataSetAsync(new CommandDefinition
 {
     CommandText = "dbo.GetCustomerAndOrders",
     CommandType = CommandType.StoredProcedure
 });
 
-var outputs = dataSet.GetOutputParameters();
+var dataSet = result.DataSet;
+var outputs = result.OutputParameters;
 var customers = dataSet.Tables[0];
 var orders = dataSet.Tables[1];
 ```
@@ -134,10 +137,11 @@ var orders = dataSet.Tables[1];
 
 Use:
 
-- `IDbExecutor.ExecuteAsync(...)` → affected rows
+- `IDbExecutor.ExecuteAsync(...)` → `(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)`
 
 ```csharp
-var affected = await executor.ExecuteAsync(new CommandDefinition
+(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters) result =
+    await executor.ExecuteAsync(new CommandDefinition
 {
     CommandText = "update dbo.Items set Processed = 1 where Id = @id",
     CommandType = CommandType.Text,
@@ -146,6 +150,8 @@ var affected = await executor.ExecuteAsync(new CommandDefinition
         new DbParameter { Name = "@id", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = 42 }
     }
 });
+
+var affected = result.RowsAffected;
 ```
 
 ### B) Bulk insert (provider-native)
@@ -191,4 +197,3 @@ Application code should avoid referencing these namespaces/classes directly:
 - `AdoAsync.Resilience.*` (retry policy internals)
 
 Stick to the API in sections 1–4 above.
-

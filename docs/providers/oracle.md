@@ -58,7 +58,8 @@ var table = await executor.QueryTableAsync(new CommandDefinition
     }
 });
 
-foreach (DataRow row in table.Rows)
+var tableRows = table.Table.Rows;
+foreach (DataRow row in tableRows)
 {
     var id = row.Field<int>("Id");
     var name = row.Field<string>("Name");
@@ -101,13 +102,7 @@ var ordersTable = tables[1];
 
 ### RefCursor + output parameters (combined)
 
-If the procedure also returns non-cursor outputs, they are extracted and attached to the first table:
-
-```csharp
-using AdoAsync.Extensions.Execution;
-
-var outputs = tables[0].GetOutputParameters();
-```
+`QueryTablesAsync` only returns tables. If you need output parameters too, call `ExecuteDataSetAsync` and use the returned tuple’s `OutputParameters`.
 
 ---
 
@@ -117,9 +112,9 @@ For output parameters without refcursors, use `QueryTableAsync` (it can return a
 
 ```csharp
 using System.Data;
-using AdoAsync.Extensions.Execution;
 
-var table = await executor.QueryTableAsync(new CommandDefinition
+(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters) result =
+    await executor.QueryTableAsync(new CommandDefinition
 {
     CommandText = "PKG_ITEMS.UPDATE_AND_RETURN_STATUS",
     CommandType = CommandType.StoredProcedure,
@@ -131,9 +126,8 @@ var table = await executor.QueryTableAsync(new CommandDefinition
     }
 });
 
-var outputs = table.GetOutputParameters();
-var status = (int?)outputs?["p_status"];
-var message = (string?)outputs?["p_message"];
+var status = (int?)result.OutputParameters["p_status"];
+var message = (string?)result.OutputParameters["p_message"];
 ```
 
 ---
@@ -171,4 +165,3 @@ Notes:
 
 - Keep `EnableValidation = true` for identifier allow-lists (bulk import + dynamic identifiers).
 - Prefer buffered patterns (`QueryTableAsync` / `QueryTablesAsync`) for reads and stored procedures.
-

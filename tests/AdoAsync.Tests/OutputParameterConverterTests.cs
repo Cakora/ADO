@@ -13,7 +13,7 @@ public class OutputParameterConverterTests
         // Oracle often returns numeric outputs as decimal.
         var value = 42.0m;
 
-        var result = OutputParameterConverter.Normalize(value, DbDataType.Int64);
+        var result = DbValueNormalizer.Normalize(value, DbDataType.Int64);
 
         result.Should().BeOfType<long>();
         result.Should().Be(42L);
@@ -24,7 +24,7 @@ public class OutputParameterConverterTests
     {
         var guid = Guid.NewGuid();
 
-        var result = OutputParameterConverter.Normalize(guid.ToString(), DbDataType.Guid);
+        var result = DbValueNormalizer.Normalize(guid.ToString(), DbDataType.Guid);
 
         result.Should().BeOfType<Guid>();
         result.Should().Be(guid);
@@ -35,7 +35,7 @@ public class OutputParameterConverterTests
     {
         var now = new DateTime(2024, 1, 1, 12, 30, 0, DateTimeKind.Utc);
 
-        var result = OutputParameterConverter.Normalize(now, DbDataType.DateTimeOffset);
+        var result = DbValueNormalizer.Normalize(now, DbDataType.DateTimeOffset);
 
         result.Should().BeOfType<DateTimeOffset>();
         result.Should().Be(new DateTimeOffset(now));
@@ -44,7 +44,7 @@ public class OutputParameterConverterTests
     [Fact]
     public void Normalize_ConvertsTimeStringToTimeSpan()
     {
-        var result = OutputParameterConverter.Normalize("01:02:03", DbDataType.Time);
+        var result = DbValueNormalizer.Normalize("01:02:03", DbDataType.Time);
 
         result.Should().BeOfType<TimeSpan>();
         result.Should().Be(TimeSpan.FromHours(1) + TimeSpan.FromMinutes(2) + TimeSpan.FromSeconds(3));
@@ -55,7 +55,7 @@ public class OutputParameterConverterTests
     {
         var value = new object();
 
-        var result = OutputParameterConverter.Normalize(value, DbDataType.Int32);
+        var result = DbValueNormalizer.Normalize(value, DbDataType.Int32);
 
         result.Should().BeSameAs(value);
     }

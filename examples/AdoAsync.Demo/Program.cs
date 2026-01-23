@@ -40,11 +40,14 @@ var commandText = databaseType switch
     _ => "SELECT CURRENT_TIMESTAMP"
 };
 
-var now = await executor.ExecuteScalarAsync<DateTime>(new CommandDefinition
-{
-    CommandText = commandText,
-    CommandType = CommandType.Text
-});
+(DateTime Value, IReadOnlyDictionary<string, object?> OutputParameters) nowResult =
+    await executor.ExecuteScalarAsync<DateTime>(new CommandDefinition
+    {
+        CommandText = commandText,
+        CommandType = CommandType.Text
+    });
+
+DateTime now = nowResult.Value;
 
 Console.WriteLine($"Database time: {now:O}");
 #endregion

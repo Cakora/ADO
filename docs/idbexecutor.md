@@ -104,6 +104,26 @@ It includes common primitives plus `RefCursor` for PostgreSQL/Oracle cursor outp
 
 `IDbExecutor` is **async-only** and **not thread-safe** (treat it as Scoped per request).
 
+### Output Parameters Support (No Confusion Matrix)
+
+Output parameters are not “returned” the same way on every method. Use this table as the rule of truth:
+
+| Method | Return | Output Params Supported? | How To Read Outputs |
+|---|---|---:|---|
+| `ExecuteReaderAsync` | `DbDataReader` | No | — |
+| `ExecuteReaderWithOutputsAsync` | `StreamingReaderResult` | Yes (SQL Server/PostgreSQL) | `await result.GetOutputParametersAsync()` (after reader closed) |
+| `StreamAsync` | `IAsyncEnumerable<IDataRecord>` | No | — |
+| `ExecuteScalarAsync<T>` | `(T Value, IReadOnlyDictionary<string, object?> OutputParameters)` | Yes (all providers) | returned in tuple |
+| `ExecuteAsync` | `(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)` | Yes (all providers) | returned in tuple |
+| `QueryTableAsync` | `(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)` | Yes (all providers) | returned in tuple |
+| `QueryAsync<T>(DataRow map)` | `(List<T> Rows, IReadOnlyDictionary<string, object?> OutputParameters)` | Yes (all providers) | returned in tuple |
+| `ExecuteDataSetAsync` | `(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)` | Yes (all providers) | returned in tuple |
+
+Notes:
+
+- Streaming outputs exist only on `ExecuteReaderWithOutputsAsync` because ADO.NET output params are available after the reader is finished/closed.
+- Tuple-returning output dictionaries use normalized keys (prefix trimmed): `@NewId` / `:NewId` / `?NewId` → `"NewId"`.
+
 ### Streaming APIs (fastest, lowest memory)
 
 - `ExecuteReaderAsync(...)` → `DbDataReader`
@@ -128,29 +148,25 @@ There is also a convenience wrapper:
 
 ### Buffered APIs (materialize results; easiest)
 
-- `ExecuteScalarAsync<T>(...)` → `T`
+- `ExecuteScalarAsync<T>(...)` → `(T Value, IReadOnlyDictionary<string, object?> OutputParameters)`
   - Provider support: **all**
-  - Output parameters: **not returned**
+  - Output parameters: **returned**
 
-- `ExecuteAsync(...)` → `int` rows affected
+- `ExecuteAsync(...)` → `(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)`
   - Provider support: **all**
-  - Output parameters: **not returned** (use buffered result methods if you need outputs).
+  - Output parameters: **returned**
 
-- `QueryTableAsync(...)` → `DataTable`
+- `QueryTableAsync(...)` → `(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)`
   - Provider support: **all**
-  - Output parameters:
-    - stored in `DataTable.ExtendedProperties["OutputParameters"]`
-    - retrieve via `AdoAsync.Extensions.Execution.OutputParameterExtensions.GetOutputParameters(table)`
+  - Output parameters: returned in tuple
 
-- `QueryAsync<T>(..., Func<DataRow,T> map)` → `List<T>`
+- `QueryAsync<T>(..., Func<DataRow,T> map)` → `(List<T> Rows, IReadOnlyDictionary<string, object?> OutputParameters)`
   - Provider support: **all**
   - This buffers using `QueryTableAsync` then maps rows.
 
-- `ExecuteDataSetAsync(...)` → `DataSet`
+- `ExecuteDataSetAsync(...)` → `(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)`
   - Provider support: **all**
-  - Output parameters:
-    - stored in `DataSet.ExtendedProperties["OutputParameters"]`
-    - retrieve via `OutputParameterExtensions.GetOutputParameters(dataSet)`
+  - Output parameters: returned in tuple
 
 ### DbExecutor-only APIs (not on the interface)
 
@@ -198,7 +214,8 @@ await using var executor = DbExecutor.Create(new DbOptions
     CommandTimeoutSeconds = 30
 });
 
-var affected = await executor.ExecuteAsync(new CommandDefinition
+(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters) affected =
+    await executor.ExecuteAsync(new CommandDefinition
 {
     CommandText = "update dbo.Items set Name = @name where Id = @id",
     CommandType = CommandType.Text,
@@ -208,19 +225,49 @@ var affected = await executor.ExecuteAsync(new CommandDefinition
         new DbParameter { Name = "@name", DataType = DbDataType.String, Direction = ParameterDirection.Input, Value = "NewName" }
     }
 });
+
+int rowsAffected = affected.RowsAffected;
 ```
 
-### 5.2 Output parameters (buffered path)
+### 5.2 Output parameters (complete examples)
 
-Use `QueryTableAsync` or `ExecuteDataSetAsync`, then read output parameters from ExtendedProperties:
+#### A) Non-query + outputs (all providers; tuple return)
+
+```csharp
+using System.Collections.Generic;
+using System.Data;
+using AdoAsync;
+using AdoAsync.Execution;
+
+(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters) result =
+    await executor.ExecuteAsync(new CommandDefinition
+    {
+        CommandText = "dbo.UpdateAndReturnStatus",
+        CommandType = CommandType.StoredProcedure,
+        Parameters = new[]
+        {
+            new DbParameter { Name = "@id", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = 42 },
+            new DbParameter { Name = "@status", DataType = DbDataType.Int32, Direction = ParameterDirection.Output },
+            new DbParameter { Name = "@message", DataType = DbDataType.String, Direction = ParameterDirection.Output, Size = 4000 }
+        }
+    });
+
+int rowsAffected = result.RowsAffected;
+int? status = (int?)result.OutputParameters["status"];
+string? message = (string?)result.OutputParameters["message"];
+```
+
+#### B) Buffered rows + outputs (all providers; read from `ExtendedProperties`)
+
+Use `QueryTableAsync` or `ExecuteDataSetAsync` and read output parameters from the returned tuple:
 
 ```csharp
 using System.Data;
 using AdoAsync;
 using AdoAsync.Execution;
-using AdoAsync.Extensions.Execution;
 
-var table = await executor.QueryTableAsync(new CommandDefinition
+(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters) tableResult =
+    await executor.QueryTableAsync(new CommandDefinition
 {
     CommandText = "dbo.UpdateAndReturnStatus",
     CommandType = CommandType.StoredProcedure,
@@ -232,9 +279,8 @@ var table = await executor.QueryTableAsync(new CommandDefinition
     }
 });
 
-var outputs = table.GetOutputParameters();
-var status = (int?)outputs?["status"];
-var message = (string?)outputs?["message"];
+var status = (int?)tableResult.OutputParameters["status"];
+var message = (string?)tableResult.OutputParameters["message"];
 ```
 
 Expected output shape (example):
@@ -280,8 +326,10 @@ var total = (int?)outputs?["total"];
 await using var executor = DbExecutor.Create(options);
 await using var tx = await executor.BeginTransactionAsync();
 
-await executor.ExecuteAsync(new CommandDefinition { CommandText = "update ..." });
-await executor.ExecuteAsync(new CommandDefinition { CommandText = "insert ..." });
+(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters) _ =
+    await executor.ExecuteAsync(new CommandDefinition { CommandText = "update ..." });
+(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters) __ =
+    await executor.ExecuteAsync(new CommandDefinition { CommandText = "insert ..." });
 
 await tx.CommitAsync(); // if omitted, DisposeAsync rolls back
 ```
@@ -353,14 +401,12 @@ var result = await executor.BulkImportAsync(items, tableName: "dbo.Items");
 
 ## 8) Extensions Used (How Many + What They Do)
 
-This repo contains **13** extension classes (`static class ...Extensions`).
+This repo contains **12** extension classes (`static class ...Extensions`).
 
 ### Public extensions (caller-facing)
 
 - `AdoAsync.DependencyInjection.AdoAsyncServiceCollectionExtensions`
   - DI registration (`AddAdoAsyncFactory`, `AddAdoAsync`, `AddAdoAsyncExecutor`)
-- `AdoAsync.Extensions.Execution.OutputParameterExtensions`
-  - `GetOutputParameters(DataTable)` / `GetOutputParameters(DataSet)`
 - `AdoAsync.Common.DataRecordExtensions`
   - `IDataRecord.Get<T>(ordinal/name)` (typed getter + conversions)
 - `AdoAsync.Common.DataTableExtensions`

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Collections.Frozen;
 using System.Data.Common;
 using System.Data;
 using System.Linq;
@@ -20,16 +19,20 @@ internal static class ParameterHelper
             return null;
         }
 
-        // Freeze the declared parameter map for fast, repeated lookups when extracting outputs.
-        var parameterLookup = parameters
-            .ToDictionary(p => TrimParameterPrefix(p.Name), StringComparer.OrdinalIgnoreCase)
-            .ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        // Build a case-insensitive map of declared parameter definitions for normalization decisions.
+        // Use a single dictionary to avoid extra allocations (ToDictionary + FrozenDictionary).
+        var parameterLookup = new Dictionary<string, DbParameter>(parameters.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var declared in parameters)
+        {
+            parameterLookup[TrimParameterPrefix(declared.Name)] = declared;
+        }
 
         Dictionary<string, object?>? outputValues = null;
 
         foreach (System.Data.Common.DbParameter parameter in command.Parameters)
         {
-            if (parameter.Direction == ParameterDirection.Input)
+            // Only expose OUTPUT / INPUTOUTPUT parameters (exclude ReturnValue and Input).
+            if (parameter.Direction is ParameterDirection.Input or ParameterDirection.ReturnValue)
             {
                 continue;
             }
@@ -46,7 +49,7 @@ internal static class ParameterHelper
             outputValues ??= new Dictionary<string, object?>(command.Parameters.Count, StringComparer.OrdinalIgnoreCase);
             if (hasDefinition && definition != null)
             {
-                outputValues[name] = OutputParameterConverter.Normalize(parameter.Value, definition.DataType);
+                outputValues[name] = DbValueNormalizer.Normalize(parameter.Value, definition.DataType);
             }
             else
             {

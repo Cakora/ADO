@@ -21,10 +21,12 @@ Caller handling pattern:
 ```csharp
 try
 {
-    var rows = await executor.ExecuteAsync(new CommandDefinition
-    {
-        CommandText = "update dbo.Items set Processed = 1"
-    });
+    (int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters) result =
+        await executor.ExecuteAsync(new CommandDefinition
+        {
+            CommandText = "update dbo.Items set Processed = 1"
+        });
+    var rows = result.RowsAffected;
 }
 catch (DbCallerException ex)
 {
@@ -63,15 +65,17 @@ var options = new DbOptions
 
 await using var executor = DbExecutor.Create(options);
 
-var rows = await executor.ExecuteAsync(new CommandDefinition
-{
-    CommandText = "update dbo.Items set Processed = 1 where Id = @id",
-    CommandType = CommandType.Text,
-    Parameters = new[]
+(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters) result =
+    await executor.ExecuteAsync(new CommandDefinition
     {
-        new DbParameter { Name = "@id", DataType = DbDataType.Int32, Value = 42, Direction = ParameterDirection.Input }
-    }
-});
+        CommandText = "update dbo.Items set Processed = 1 where Id = @id",
+        CommandType = CommandType.Text,
+        Parameters = new[]
+        {
+            new DbParameter { Name = "@id", DataType = DbDataType.Int32, Value = 42, Direction = ParameterDirection.Input }
+        }
+    });
+var rows = result.RowsAffected;
 ```
 
 See `IMPLEMENTATION_GUIDE.md` for the full behavior and guardrails.
@@ -104,7 +108,9 @@ public sealed class MyService(IDbExecutorFactory factory)
         };
 
         await using var exec = factory.Create(options);
-        return await exec.ExecuteAsync(new CommandDefinition { CommandText = "select 1", CommandType = CommandType.Text });
+        (int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters) result =
+            await exec.ExecuteAsync(new CommandDefinition { CommandText = "select 1", CommandType = CommandType.Text });
+        return result.RowsAffected;
     }
 }
 ```
@@ -411,6 +417,8 @@ Provider-specific examples:
 - `docs/type-handling.md` (provider type differences and normalization notes)
 - `docs/idbexecutor.md` (full IDbExecutor/DbExecutor documentation)
 - `docs/extensions.md` (extensions inventory + usage)
+- `docs/streaming.md` (streaming/IAsyncEnumerable guide)
+- `docs/output-parameters.md` (output parameter patterns + examples)
 - `docs/linq2db.md` (typed bulk copy)
 - `docs/bulk-update.md` (bulk update/upsert pattern)
 - `docs/what-to-use.md` (recommended “use only these” API guide)

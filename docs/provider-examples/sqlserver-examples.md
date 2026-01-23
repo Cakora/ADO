@@ -44,9 +44,9 @@ await foreach (var customer in executor.QueryAsync(
 
 ```csharp
 using System.Data;
-using AdoAsync.Extensions.Execution;
 
-var table = await executor.QueryTableAsync(new CommandDefinition
+(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters) result =
+    await executor.QueryTableAsync(new CommandDefinition
 {
     CommandText = "dbo.UpdateAndReturnStatus",
     CommandType = CommandType.StoredProcedure,
@@ -58,8 +58,6 @@ var table = await executor.QueryTableAsync(new CommandDefinition
     }
 });
 
-var outputs = table.GetOutputParameters();
-var status = (int?)outputs?["status"];
-var message = (string?)outputs?["message"];
+var status = (int?)result.OutputParameters["status"];
+var message = (string?)result.OutputParameters["message"];
 ```
-

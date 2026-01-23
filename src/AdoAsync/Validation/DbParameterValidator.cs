@@ -24,11 +24,14 @@ public sealed class DbParameterValidator : AbstractValidator<DbParameter>
 
         RuleFor(x => x.Name).NotEmpty();
 
+        RuleFor(x => x.Direction)
+            .Must(direction => direction != System.Data.ParameterDirection.ReturnValue)
+            .WithMessage("ReturnValue parameters are not supported.");
+
         RuleFor(x => x)
             .Must(p => !IsLengthConstrainedType(p.DataType) || p.Size.HasValue)
             .When(p => p.Direction is System.Data.ParameterDirection.Output
-                or System.Data.ParameterDirection.InputOutput
-                or System.Data.ParameterDirection.ReturnValue)
+                or System.Data.ParameterDirection.InputOutput)
             // Output parameters need explicit sizing across providers.
             .WithMessage("Output parameters must specify Size.");
 
@@ -60,8 +63,7 @@ public sealed class DbParameterValidator : AbstractValidator<DbParameter>
         RuleFor(x => x)
             .Must(p => p.DataType != DbDataType.RefCursor
                        || p.Direction is System.Data.ParameterDirection.Output
-                       or System.Data.ParameterDirection.InputOutput
-                       or System.Data.ParameterDirection.ReturnValue)
+                       or System.Data.ParameterDirection.InputOutput)
             // RefCursor is a provider feature (Oracle/PostgreSQL) and only valid as an output.
             .WithMessage("RefCursor parameters must be Output or InputOutput.");
     }

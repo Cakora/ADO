@@ -42,15 +42,13 @@ Examples:
 - Declare `@total` (SQL Server) → outputs dictionary key `total`
 - Declare `:p_status` (Oracle) → outputs dictionary key `p_status`
 
-Output parameters are surfaced on buffered methods via:
+Output parameters are surfaced via tuple-returning executor methods:
 
-- `DataTable.ExtendedProperties["OutputParameters"]`
-- `DataSet.ExtendedProperties["OutputParameters"]`
-
-Retrieve them via:
-
-- `AdoAsync.Extensions.Execution.OutputParameterExtensions.GetOutputParameters(DataTable)`
-- `AdoAsync.Extensions.Execution.OutputParameterExtensions.GetOutputParameters(DataSet)`
+- `ExecuteAsync(...)` → `(RowsAffected, OutputParameters)`
+- `ExecuteScalarAsync<T>(...)` → `(Value, OutputParameters)`
+- `QueryTableAsync(...)` → `(Table, OutputParameters)`
+- `QueryAsync<T>(...)` → `(Rows, OutputParameters)`
+- `ExecuteDataSetAsync(...)` → `(DataSet, OutputParameters)`
 
 For streaming reader + outputs (SQL Server/PostgreSQL only), use:
 
@@ -118,4 +116,3 @@ These are common cases across ADO.NET providers that you should plan for:
 - For output parameters, always set `Size` for output strings/binary.
 - If you need output parameters from a procedure that does not return result sets, call `QueryTableAsync` (it can return an empty table and still surface outputs).
 - Use `DbDataType.RefCursor` only for PostgreSQL/Oracle refcursor outputs, and consume them via `QueryTablesAsync` / `QueryTableAsync`.
-

@@ -13,65 +13,90 @@ namespace AdoAsync.Execution;
 /// <summary>Refcursor-specific paths (extracted for readability).</summary>
 public sealed partial class DbExecutor
 {
-    #region Refcursor routing
+    #region Refcursor - Routing
     private bool ShouldUseOracleRefCursorPath(CommandDefinition command) =>
         CursorHelper.IsOracleRefCursor(_options.DatabaseType, command);
 
     private bool ShouldUsePostgresRefCursorPath(CommandDefinition command) =>
         CursorHelper.IsPostgresRefCursor(_options.DatabaseType, command);
+
+    private bool IsRefCursorCommand(CommandDefinition command) =>
+        ShouldUseOracleRefCursorPath(command) || ShouldUsePostgresRefCursorPath(command);
+
+    private ValueTask<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteRefCursorsWithOutputsAsync(
+        CommandDefinition command,
+        CancellationToken cancellationToken) =>
+        ShouldUseOracleRefCursorPath(command)
+            ? ExecuteOracleRefCursorsWithOutputsAsync(command, cancellationToken)
+            : ExecutePostgresRefCursorsWithOutputsAsync(command, cancellationToken);
     #endregion
 
-    #region Refcursor transaction helpers
+    #region Refcursor - Transaction Scope
     private async ValueTask<T> WithTransactionScopeAsync<T>(CancellationToken cancellationToken, Func<DbTransaction, Task<T>> action)
     {
-        // Refcursors must be consumed within a transaction scope (reuse caller transaction when present).
-        await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
+        // PostgreSQL refcursors must be fetched within the same transaction that created them.
+        // Reuse an existing user transaction when present; otherwise create a local transaction.
+        await EnsureReadyAsync(cancellationToken).ConfigureAwait(false);
 
-        await using var transaction = _activeTransaction is null
-            ? await _connection!.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
-            : null;
-        var startedTransaction = transaction is not null;
-        var effectiveTransaction = transaction ?? _activeTransaction!;
+        if (_activeTransaction is not null)
+        {
+            return await action(_activeTransaction).ConfigureAwait(false);
+        }
 
+        await using var transaction = await _connection!.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var result = await action(effectiveTransaction).ConfigureAwait(false);
-            if (startedTransaction)
-            {
-                await transaction!.CommitAsync(cancellationToken).ConfigureAwait(false);
-            }
+            var result = await action(transaction).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return result;
         }
         catch
         {
-            if (startedTransaction)
-            {
-                await transaction!.RollbackAsync(cancellationToken).ConfigureAwait(false);
-            }
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             throw;
         }
     }
     #endregion
 
-    #region Refcursor execution
-    private async ValueTask<IReadOnlyList<DataTable>> ExecuteOracleRefCursorsAsync(CommandDefinition command, CancellationToken cancellationToken)
+    #region Refcursor - Oracle
+    // Oracle exposes result sets via output refcursor parameters; reading is handled provider-side.
+    private async ValueTask<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteOracleRefCursorsWithOutputsAsync(
+        CommandDefinition command,
+        CancellationToken cancellationToken)
     {
         try
         {
-            return await ExecuteWithRetryIfAllowedAsync(async ct =>
-            {
-                await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
-                await dbCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            // Policy: do not retry refcursor stored procedures.
+            // Even when the provider doesn't require an explicit transaction (Oracle),
+            // stored procedures can have side effects and retries can duplicate work.
+            await EnsureNotDisposedAsync().ConfigureAwait(false);
+            await using var dbCommand = await CreateCommandAsync(command, cancellationToken).ConfigureAwait(false);
+            await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
-                var tables = OracleProvider.ReadRefCursorResults(dbCommand);
-                var outputs = command.Parameters is { Count: > 0 }
-                    ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
-                    : null;
+            var tables = OracleProvider.ReadRefCursorResults(dbCommand);
+            var outputs = ExtractOutputParametersOrEmpty(dbCommand, command.Parameters);
+            return (Tables: tables, OutputParameters: outputs);
+        }
+        catch (Exception ex)
+        {
+            var error = MapError(ex);
+            throw new DbCallerException(error, ex);
+        }
+    }
+    #endregion
 
-                AttachOutputsToFirstTable(tables, outputs);
-
-                return tables;
-            }, cancellationToken).ConfigureAwait(false);
+    #region Refcursor - PostgreSQL
+    // PostgreSQL returns refcursor names as output parameters; results must be fetched explicitly (FETCH ALL IN ...)
+    // and must run inside the same transaction scope.
+    private async ValueTask<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> ExecutePostgresRefCursorsWithOutputsAsync(
+        CommandDefinition command,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Policy: never retry when a transaction scope is required.
+            // PostgreSQL refcursors require a transaction; retry would re-run the stored procedure and can duplicate side effects.
+            return await ExecutePostgresRefCursorsWithOutputsCoreAsync(command, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -80,50 +105,32 @@ public sealed partial class DbExecutor
         }
     }
 
-    private async ValueTask<IReadOnlyList<DataTable>> ExecutePostgresRefCursorsAsync(CommandDefinition command, CancellationToken cancellationToken)
+    private async Task<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> ExecutePostgresRefCursorsWithOutputsCoreAsync(
+        CommandDefinition command,
+        CancellationToken cancellationToken)
     {
-        try
-        {
-            return await ExecuteWithRetryIfAllowedAsync(async ct =>
-            {
-                // Ensure we have a transaction for opening + fetching refcursors.
-                return await WithTransactionScopeAsync(ct, async effectiveTransaction =>
-                {
-                    await using var dbCommand = await CreateCommandAsync(command, ct).ConfigureAwait(false);
-                    dbCommand.Transaction = effectiveTransaction;
-
-                    await dbCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-
-                    var tables = await PostgreSqlProvider
-                        .ReadRefCursorResultsAsync(dbCommand, _connection!, effectiveTransaction, ct)
-                        .ConfigureAwait(false);
-
-                    var outputs = command.Parameters is { Count: > 0 }
-                        ? ParameterHelper.ExtractOutputParameters(dbCommand, command.Parameters)
-                        : null;
-
-                    AttachOutputsToFirstTable(tables, outputs);
-
-                    return tables;
-                }).ConfigureAwait(false);
-            }, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            var error = MapError(ex);
-            throw new DbCallerException(error, ex);
-        }
+        // Always ensure a transaction for opening + fetching the cursors.
+        return await WithTransactionScopeAsync(
+                cancellationToken,
+                tx => ExecutePostgresRefCursorsInTransactionAsync(command, tx, cancellationToken))
+            .ConfigureAwait(false);
     }
 
-    private static void AttachOutputsToFirstTable(IReadOnlyList<DataTable> tables, IReadOnlyDictionary<string, object?>? outputs)
+    private async Task<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> ExecutePostgresRefCursorsInTransactionAsync(
+        CommandDefinition command,
+        DbTransaction transaction,
+        CancellationToken cancellationToken)
     {
-        if (outputs is null || tables.Count == 0)
-        {
-            return;
-        }
+        await using var dbCommand = await CreateCommandAsync(command, cancellationToken).ConfigureAwait(false);
+        dbCommand.Transaction = transaction;
+        await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
-        // Attach once; outputs are identical for all result sets.
-        tables[0].ExtendedProperties["OutputParameters"] = outputs;
+        var tables = await PostgreSqlProvider
+            .ReadRefCursorResultsAsync(dbCommand, _connection!, transaction, cancellationToken)
+            .ConfigureAwait(false);
+
+        var outputs = ExtractOutputParametersOrEmpty(dbCommand, command.Parameters);
+        return (Tables: tables, OutputParameters: outputs);
     }
     #endregion
 }

@@ -133,7 +133,8 @@ var bulk = await executor.BulkImportAsync(stageRequest);
 if (!bulk.Success) throw new Exception(bulk.Error!.MessageKey);
 
 // 2) apply stage -> target (provider-specific SQL)
-var affected = await executor.ExecuteAsync(new CommandDefinition
+(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters) applyResult =
+    await executor.ExecuteAsync(new CommandDefinition
 {
     CommandText = "/* paste provider-specific upsert SQL here */",
     CommandType = CommandType.Text
@@ -141,7 +142,7 @@ var affected = await executor.ExecuteAsync(new CommandDefinition
 
 await tx.CommitAsync();
 
-Console.WriteLine($"StageRowsInserted={bulk.RowsInserted}, ApplyRowsAffected={affected}");
+Console.WriteLine($"StageRowsInserted={bulk.RowsInserted}, ApplyRowsAffected={applyResult.RowsAffected}");
 ```
 
 Expected output shape (example):
@@ -158,4 +159,3 @@ Expected output shape (example):
 - Put a unique index on the match key (e.g., `Name`) in the target table.
 - Clean up staging after apply (truncate or partition-based cleanup).
 - If you need per-row error reporting, capture invalid rows into a reject table before applying.
-

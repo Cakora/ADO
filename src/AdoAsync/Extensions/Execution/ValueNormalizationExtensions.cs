@@ -1,7 +1,131 @@
 using System;
-using System.Data;
+using System.Globalization;
 
-namespace AdoAsync.Extensions.Execution;
+namespace AdoAsync.Execution
+{
+    /// <summary>Best-effort normalization for provider-returned scalar values based on declared <see cref="DbDataType"/>.</summary>
+    internal static class DbValueNormalizer
+    {
+        internal static object? Normalize(object? value, DbDataType dataType)
+        {
+            if (value is null or DBNull)
+            {
+                return null;
+            }
+
+            // Best-effort normalization for cross-provider consistency; falls back to raw value.
+            // This intentionally avoids throwing so values remain usable.
+            try
+            {
+                var inv = CultureInfo.InvariantCulture;
+                return dataType switch
+                {
+                    DbDataType.String
+                        or DbDataType.AnsiString
+                        or DbDataType.StringFixed
+                        or DbDataType.AnsiStringFixed
+                        or DbDataType.Clob
+                        or DbDataType.NClob
+                        or DbDataType.Json
+                        or DbDataType.Xml => Convert.ToString(value, inv),
+                    DbDataType.Int16 => Convert.ToInt16(value, inv),
+                    DbDataType.Int32 => Convert.ToInt32(value, inv),
+                    DbDataType.Int64 => Convert.ToInt64(value, inv),
+                    DbDataType.Byte => Convert.ToByte(value, inv),
+                    DbDataType.SByte => Convert.ToSByte(value, inv),
+                    DbDataType.UInt16 => Convert.ToUInt16(value, inv),
+                    DbDataType.UInt32 => Convert.ToUInt32(value, inv),
+                    DbDataType.UInt64 => Convert.ToUInt64(value, inv),
+                    DbDataType.Decimal or DbDataType.Currency => Convert.ToDecimal(value, inv),
+                    DbDataType.Double => Convert.ToDouble(value, inv),
+                    DbDataType.Single => Convert.ToSingle(value, inv),
+                    DbDataType.Boolean => Convert.ToBoolean(value, inv),
+                    DbDataType.Guid => NormalizeGuid(value),
+                    DbDataType.Binary or DbDataType.Blob => NormalizeBinary(value),
+                    DbDataType.Date
+                        or DbDataType.DateTime
+                        or DbDataType.DateTime2 => Convert.ToDateTime(value, inv),
+                    DbDataType.DateTimeOffset => NormalizeDateTimeOffset(value),
+                    DbDataType.Time or DbDataType.Interval => NormalizeTimeSpan(value),
+                    _ => value
+                };
+            }
+            catch
+            {
+                return value;
+            }
+        }
+
+        private static object NormalizeGuid(object value)
+        {
+            if (value is Guid guid)
+            {
+                return guid;
+            }
+
+            if (value is byte[] bytes && bytes.Length == 16)
+            {
+                return new Guid(bytes);
+            }
+
+            if (value is string text && Guid.TryParse(text, out var parsed))
+            {
+                return parsed;
+            }
+
+            return value;
+        }
+
+        private static object NormalizeBinary(object value)
+        {
+            if (value is byte[] bytes)
+            {
+                return bytes;
+            }
+
+            return value;
+        }
+
+        private static object NormalizeDateTimeOffset(object value)
+        {
+            if (value is DateTimeOffset offset)
+            {
+                return offset;
+            }
+
+            if (value is DateTime dateTime)
+            {
+                return new DateTimeOffset(dateTime);
+            }
+
+            var parsed = Convert.ToDateTime(value, CultureInfo.InvariantCulture);
+            return new DateTimeOffset(parsed);
+        }
+
+        private static object NormalizeTimeSpan(object value)
+        {
+            if (value is TimeSpan span)
+            {
+                return span;
+            }
+
+            if (value is DateTime dateTime)
+            {
+                return dateTime.TimeOfDay;
+            }
+
+            if (value is string text && TimeSpan.TryParse(text, CultureInfo.InvariantCulture, out var parsed))
+            {
+                return parsed;
+            }
+
+            return value;
+        }
+    }
+}
+
+namespace AdoAsync.Extensions.Execution
+{
 
 /// <summary>Normalization helpers to make DataRow/DataReader values LINQ-friendly across providers.</summary>
 public static class ValueNormalizationExtensions
@@ -12,91 +136,8 @@ public static class ValueNormalizationExtensions
     /// <returns>Normalized value (null for DBNull; bool/Guid normalized when possible).</returns>
     public static object? NormalizeByType(this object? value, DbDataType dataType)
     {
-        if (value is DBNull)
-        {
-            return null;
-        }
-
-        return dataType switch
-        {
-            DbDataType.Boolean => value is null ? null : NormalizeBoolean(value),
-            DbDataType.Guid => value is null ? null : NormalizeGuid(value),
-            DbDataType.Int64 => value is null ? null : NormalizeInt64(value),
-            DbDataType.UInt64 => value is null ? null : NormalizeUInt64(value),
-            DbDataType.Decimal => value is null ? null : NormalizeDecimal(value),
-            DbDataType.DateTimeOffset => value is null ? null : NormalizeDateTimeOffset(value),
-            _ => value
-        };
+        return AdoAsync.Execution.DbValueNormalizer.Normalize(value, dataType);
     }
-
-    private static object NormalizeBoolean(object value) =>
-        value switch
-        {
-            bool b => b,
-            byte by => by switch
-            {
-                0 => false,
-                1 => true,
-                _ => by
-            },
-            short s => s switch
-            {
-                0 => false,
-                1 => true,
-                _ => s
-            },
-            decimal d when d == 0m || d == 1m => d == 1m,
-            _ => value
-        };
-
-    private static object NormalizeGuid(object value) =>
-        value switch
-        {
-            Guid g => g,
-            byte[] bytes when bytes.Length == 16 => new Guid(bytes),
-            string s when Guid.TryParse(s, out var parsed) => parsed,
-            _ => value
-        };
-
-    private static object NormalizeInt64(object value) =>
-        value switch
-        {
-            long l => l,
-            decimal d when TryDecimalToInt64(d, out var l) => l,
-            int i => (long)i,
-            short s => (long)s,
-            _ => value
-        };
-
-    private static object NormalizeUInt64(object value) =>
-        value switch
-        {
-            ulong ul => ul,
-            decimal d when TryDecimalToUInt64(d, out var ul) => ul,
-            long l when l >= 0 => (ulong)l,
-            _ => value
-        };
-
-    private static object NormalizeDecimal(object value) =>
-        value switch
-        {
-            decimal d => d,
-            double db => (decimal)db,
-            float f => (decimal)f,
-            long l => l,
-            int i => i,
-            short s => s,
-            byte b => b,
-            _ => value
-        };
-
-    private static object NormalizeDateTimeOffset(object value) =>
-        value switch
-        {
-            DateTimeOffset dto => dto,
-            DateTime dt => new DateTimeOffset(dt),
-            _ => value
-        };
 
     /// <summary>Normalize a raw value and return it as nullable when the type matches.</summary>
     /// <typeparam name="T">Target struct type.</typeparam>
@@ -108,38 +149,5 @@ public static class ValueNormalizationExtensions
         var normalized = value.NormalizeByType(dataType);
         return normalized is T typed ? typed : (T?)null;
     }
-
-    private static bool TryDecimalToInt64(decimal value, out long result)
-    {
-        result = 0;
-        if (decimal.Truncate(value) != value)
-        {
-            return false;
-        }
-
-        if (value < long.MinValue || value > long.MaxValue)
-        {
-            return false;
-        }
-
-        result = (long)value;
-        return true;
-    }
-
-    private static bool TryDecimalToUInt64(decimal value, out ulong result)
-    {
-        result = 0;
-        if (decimal.Truncate(value) != value || value < 0)
-        {
-            return false;
-        }
-
-        if (value > ulong.MaxValue)
-        {
-            return false;
-        }
-
-        result = (ulong)value;
-        return true;
-    }
+}
 }

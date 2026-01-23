@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Data.Common;
 using System.Data;
 using System.Linq;
@@ -26,23 +25,4 @@ internal static class CursorHelper
         && command.CommandType == CommandType.StoredProcedure
         && command.Parameters is { Count: > 0 }
         && command.Parameters.Any(p => p.DataType == DbDataType.RefCursor);
-
-    /// <summary>Collect output refcursor names from a PostgreSQL command after execution.</summary>
-    /// <param name="dbCommand">Executed command containing provider parameters.</param>
-    /// <returns>List of cursor names returned by output parameters.</returns>
-    public static List<string> CollectPostgresCursorNames(DbCommand dbCommand)
-    {
-        var names = new List<string>();
-        foreach (System.Data.Common.DbParameter parameter in dbCommand.Parameters)
-        {
-            if (parameter.Direction == ParameterDirection.Output
-                && parameter.Value is string cursorName
-                && !string.IsNullOrWhiteSpace(cursorName))
-            {
-                names.Add(cursorName);
-            }
-        }
-
-        return names;
-    }
 }

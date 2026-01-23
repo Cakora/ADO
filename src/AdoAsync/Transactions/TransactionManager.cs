@@ -83,15 +83,28 @@ public sealed class TransactionManager : ITransactionManager
     /// <summary>Disposes the transaction, rolling back if not committed.</summary>
     public async ValueTask DisposeAsync()
     {
-        if (_transaction is not null)
+        var transaction = _transaction;
+        if (transaction is null)
         {
-            if (!_committed)
+            return;
+        }
+
+        // Make DisposeAsync idempotent and allow a manager instance to be reused.
+        _transaction = null;
+        var committed = _committed;
+        _committed = false;
+
+        try
+        {
+            if (!committed)
             {
                 // Safety net: avoid leaving open transactions when callers forget to commit.
-                await _transaction.RollbackAsync().ConfigureAwait(false);
+                await transaction.RollbackAsync().ConfigureAwait(false);
             }
-
-            await _transaction.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            await transaction.DisposeAsync().ConfigureAwait(false);
         }
     }
     #endregion

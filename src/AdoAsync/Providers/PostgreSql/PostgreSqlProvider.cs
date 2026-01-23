@@ -200,6 +200,7 @@ public sealed class PostgreSqlProvider : IDbProvider
         DbTransaction transaction,
         CancellationToken cancellationToken)
     {
+        #region Refcursor
         var tables = new List<DataTable>();
         foreach (System.Data.Common.DbParameter parameter in command.Parameters)
         {
@@ -224,6 +225,7 @@ public sealed class PostgreSqlProvider : IDbProvider
         }
 
         return tables;
+        #endregion
     }
 
     private static string QuoteCursorName(ReadOnlySpan<char> name)

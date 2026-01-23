@@ -17,10 +17,10 @@ This provider uses:
 |---|---:|---|
 | Streaming (`ExecuteReaderAsync`, `StreamAsync`) | Yes | Best performance; output params not returned |
 | Streaming + output params (`ExecuteReaderWithOutputsAsync`) | Yes | outputs available after reader is closed |
-| Buffered single result (`QueryTableAsync`) | Yes | output params attached to `DataTable.ExtendedProperties` |
+| Buffered single result (`QueryTableAsync`) | Yes | output params returned in tuple |
 | Buffered multi-result (`QueryTablesAsync`) | Yes | multiple `SELECT` or stored procedure results |
 | Buffered `DataSet` (`ExecuteDataSetAsync`) | Yes | multi-result as DataSet |
-| Output parameters (buffered) | Yes | use `OutputParameterExtensions.GetOutputParameters(...)` |
+| Output parameters (buffered) | Yes | returned in tuple |
 | Bulk import (`BulkImportAsync(BulkImportRequest)`) | Yes | implemented via `SqlBulkCopy` |
 | Typed bulk import (`BulkImportAsync<T>` with linq2db) | Yes | requires `DbOptions.LinqToDb.Enable = true` |
 | RefCursor multi-results | No | SQL Server doesn’t use refcursors |
@@ -102,10 +102,11 @@ await foreach (var customer in executor.QueryAsync(
 Use `QueryTableAsync` if your stored procedure returns no rowset but you need output params:
 
 ```csharp
+using System.Collections.Generic;
 using System.Data;
-using AdoAsync.Extensions.Execution;
 
-var table = await executor.QueryTableAsync(new CommandDefinition
+(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters) result =
+    await executor.QueryTableAsync(new CommandDefinition
 {
     CommandText = "dbo.UpdateAndReturnStatus",
     CommandType = CommandType.StoredProcedure,
@@ -117,9 +118,8 @@ var table = await executor.QueryTableAsync(new CommandDefinition
     }
 });
 
-var outputs = table.GetOutputParameters();
-var status = (int?)outputs?["status"];
-var message = (string?)outputs?["message"];
+var status = (int?)result.OutputParameters["status"];
+var message = (string?)result.OutputParameters["message"];
 ```
 
 ### Streaming outputs (only if you must stream rows)
@@ -205,4 +205,3 @@ var result = await executor.BulkImportAsync(request);
 - Keep `EnableValidation = true` (especially for bulk import allow-lists and identifier validation).
 - Enable retries (`EnableRetry = true`) only when your workload can tolerate at-least-once semantics.
 - Treat `DbExecutor` as Scoped; use `IDbExecutorFactory` for multi-DB apps.
-

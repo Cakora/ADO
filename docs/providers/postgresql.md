@@ -102,14 +102,7 @@ var ordersTable = tables[1];
 
 ### RefCursor + output parameters (combined)
 
-If the procedure returns non-cursor output parameters as well, they are extracted and attached to the first table:
-
-```csharp
-using AdoAsync.Extensions.Execution;
-
-var outputs = tables[0].GetOutputParameters();
-// outputs dictionary contains non-refcursor outputs only
-```
+`QueryTablesAsync` only returns tables. If you need output parameters too, call `ExecuteDataSetAsync` and use the returned tuple’s `OutputParameters`.
 
 ---
 
@@ -119,9 +112,9 @@ For output parameters without refcursors, use a buffered call:
 
 ```csharp
 using System.Data;
-using AdoAsync.Extensions.Execution;
 
-var table = await executor.QueryTableAsync(new CommandDefinition
+(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters) result =
+    await executor.QueryTableAsync(new CommandDefinition
 {
     CommandText = "public.update_and_return_status",
     CommandType = CommandType.StoredProcedure,
@@ -133,9 +126,8 @@ var table = await executor.QueryTableAsync(new CommandDefinition
     }
 });
 
-var outputs = table.GetOutputParameters();
-var status = (int?)outputs?["status"];
-var message = (string?)outputs?["message"];
+var status = (int?)result.OutputParameters["status"];
+var message = (string?)result.OutputParameters["message"];
 ```
 
 ---
@@ -174,4 +166,3 @@ Notes:
 
 - Keep `EnableValidation = true` to protect COPY identifier usage (tables/columns).
 - For refcursor procedures, avoid manual transaction management unless you need to group multiple operations; the executor creates a transaction scope when required.
-

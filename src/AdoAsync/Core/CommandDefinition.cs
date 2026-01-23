@@ -37,5 +37,6 @@ public sealed record CommandDefinition
     /// Identifiers that will be used in the command and must be validated against <see cref="AllowedIdentifiers"/>.
     /// </summary>
     public IReadOnlyList<string>? IdentifiersToValidate { get; init; }
+
     #endregion
 }

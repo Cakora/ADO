@@ -18,7 +18,8 @@ await using var executor = DbExecutor.Create(new DbOptions
     CommandTimeoutSeconds = 30
 });
 
-var table = await executor.QueryTableAsync(new CommandDefinition
+(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters) result =
+    await executor.QueryTableAsync(new CommandDefinition
 {
     CommandText = "select Id, Name from Customers where Id >= :min_id",
     Parameters = new[]
@@ -26,6 +27,8 @@ var table = await executor.QueryTableAsync(new CommandDefinition
         new DbParameter { Name = ":min_id", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = 100 }
     }
 });
+
+var table = result.Table;
 ```
 
 ---
@@ -50,4 +53,3 @@ var tables = await executor.QueryTablesAsync(new CommandDefinition
 var customerTable = tables[0];
 var ordersTable = tables[1];
 ```
-
