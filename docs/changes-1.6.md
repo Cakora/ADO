@@ -7,6 +7,7 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 - `src/AdoAsync/Abstractions/IDbExecutor.cs:21` `ValueTask<StreamingReaderResult> ExecuteReaderAsync(CommandDefinition command, CancellationToken cancellationToken = default);`
 - `src/AdoAsync/Abstractions/IDbExecutor.cs:93` `ValueTask<TransactionHandle> BeginTransactionAsync(CancellationToken cancellationToken = default);`
 - `src/AdoAsync/Execution/Async/DbExecutor.Transactions.cs:11` `public async ValueTask<TransactionHandle> BeginTransactionAsync(CancellationToken cancellationToken = default)`
+- `src/AdoAsync/Extensions/Normalization/DbValueNormalizationExtensions.cs` (consolidated normalization entrypoint)
 
 ## Changed (API return values)
 
