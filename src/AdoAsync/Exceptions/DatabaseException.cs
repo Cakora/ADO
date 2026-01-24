@@ -9,11 +9,10 @@ namespace AdoAsync;
 /// This exception is primarily used internally within AdoAsync and gets mapped to <see cref="DbError"/>.
 /// Most callers should catch <see cref="DbCallerException"/> instead.
 /// </remarks>
-#pragma warning disable S3871 // DatabaseException is intentionally internal (caller-facing shape is DbCallerException).
-internal sealed class DatabaseException : Exception
+public sealed class DatabaseException : Exception
 {
     /// <summary>High-level reason for the failure.</summary>
-    internal ErrorCategory Kind { get; }
+    public ErrorCategory Kind { get; }
 
     /// <summary>Creates a new database exception with a validation category.</summary>
     public DatabaseException()
@@ -41,10 +40,9 @@ internal sealed class DatabaseException : Exception
         Kind = kind;
     }
 }
-#pragma warning restore S3871
 
 /// <summary>Categories for library exceptions.</summary>
-internal enum ErrorCategory
+public enum ErrorCategory
 {
     /// <summary>Validation or input-related failure.</summary>
     Validation,
