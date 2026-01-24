@@ -78,11 +78,13 @@ public static class ValidationRunner
     #region Private Helpers
     private static DbError ToError(IEnumerable<FluentValidation.Results.ValidationFailure> failures)
     {
-        // Preserve property context in a compact, client-friendly format.
-        var messages = new List<string>();
+        // Return only the first failure to keep payload small and actionable.
+        // Ordering is controlled by validator rule order.
+        string? message = null;
         foreach (var failure in failures)
         {
-            messages.Add($"{failure.PropertyName}: {failure.ErrorMessage}");
+            message = $"{failure.PropertyName}: {failure.ErrorMessage}";
+            break;
         }
 
         return new DbError
@@ -90,7 +92,7 @@ public static class ValidationRunner
             Type = DbErrorType.ValidationError,
             Code = DbErrorCode.ValidationFailed,
             MessageKey = "errors.validation",
-            MessageParameters = messages,
+            MessageParameters = message is null ? null : new[] { message },
             IsTransient = false
         };
     }
