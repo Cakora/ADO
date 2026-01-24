@@ -14,7 +14,6 @@ Async-first ADO.NET helper that keeps provider logic contained for SQL Server, P
 ## Errors and Exceptions
 - Prefer catching `DbCallerException` and reading `DbCallerException.Error` (no thrown provider exceptions leak).
 - When exceptions are thrown, catch `DbCallerException` only (single caller-facing type) and read `DbCallerException.Error`.
-- `DbClientException` exists only as a legacy name; prefer `DbCallerException`.
 - Error fields: `Type`/`Code` (category + stable code), `MessageKey`/`MessageParameters` (localization), `IsTransient` (safe to retry/backoff), `ProviderDetails` (sanitized diagnostics). `IsTransient` only influences retry when `DbOptions.EnableRetry` is true (default is off), so marking an error transient does not force retries unless you opt in.
 
 Caller handling pattern:

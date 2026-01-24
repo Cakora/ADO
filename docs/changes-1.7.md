@@ -31,3 +31,4 @@ Breaking note (localization only):
 - Simplified provider exception mappers to be “data-first” (small code/SQLSTATE lists) instead of rule-engine style matching.
 - Removed `src/AdoAsync/Exceptions/ErrorRuleMatcher.cs` (no longer needed).
 - Removed `src/AdoAsync/Exceptions/ExceptionHandler.cs` (directly maps via `ProviderHelper.MapProviderError`).
+- Removed `src/AdoAsync/Exceptions/DbClientException.cs` (legacy alias; use `DbCallerException`).
