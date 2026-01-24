@@ -32,6 +32,8 @@ Breaking note (localization only):
 - Removed `src/AdoAsync/Exceptions/ErrorRuleMatcher.cs` (no longer needed).
 - Removed `src/AdoAsync/Exceptions/ExceptionHandler.cs` (directly maps via `ProviderHelper.MapProviderError`).
 - Removed `src/AdoAsync/Exceptions/DbClientException.cs` (legacy alias; use `DbCallerException`).
+- Centralized provider `DbError` construction via `DbErrorMapper.FromProvider(...)` (reduces repeated object initialization).
+- Centralized transient default policy via `DbErrorMapper.IsTransientByType(...)` (providers only override rare cases).
 
 ## Changed (Retry guidance)
 
