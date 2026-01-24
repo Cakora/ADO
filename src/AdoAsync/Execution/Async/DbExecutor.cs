@@ -58,28 +58,40 @@ public sealed partial class DbExecutor : IDbExecutor
     /// <summary>Creates a new executor for the specified options.</summary>
     public static DbExecutor Create(DbOptions options, bool isInUserTransaction = false)
     {
-        Validate.Required(options, nameof(options));
-
-        var provider = ResolveProvider(options.DatabaseType);
-        var optionsValidator = new DbOptionsValidator();
-        var commandValidator = new CommandDefinitionValidator();
-        var parameterValidator = new DbParameterValidator();
-        var bulkImportValidator = new BulkImportRequestValidator();
-        var linqToDbConnectionFactory = new LinqToDbConnectionFactory(options.DatabaseType);
-        var linqToDbBulkImporter = new LinqToDbTypedBulkImporter(linqToDbConnectionFactory);
-
-        var retryPolicy = RetryPolicyFactory.Create(
-            options,
-            exception => MapProviderError(options.DatabaseType, exception).IsTransient,
-            isInUserTransaction);
-
-        var validationError = ValidationRunner.ValidateOptions(options, options.EnableValidation, optionsValidator);
-        if (validationError is not null)
+        try
         {
-            throw new DatabaseException(ErrorCategory.Configuration, $"Invalid DbOptions: {validationError.MessageKey}");
-        }
+            Validate.Required(options, nameof(options));
 
-        return new DbExecutor(options, provider, retryPolicy, commandValidator, parameterValidator, bulkImportValidator, linqToDbBulkImporter);
+            var provider = ResolveProvider(options.DatabaseType);
+            var optionsValidator = new DbOptionsValidator();
+            var commandValidator = new CommandDefinitionValidator();
+            var parameterValidator = new DbParameterValidator();
+            var bulkImportValidator = new BulkImportRequestValidator();
+            var linqToDbConnectionFactory = new LinqToDbConnectionFactory(options.DatabaseType);
+            var linqToDbBulkImporter = new LinqToDbTypedBulkImporter(linqToDbConnectionFactory);
+
+            var retryPolicy = RetryPolicyFactory.Create(
+                options,
+                exception => MapProviderError(options.DatabaseType, exception).IsTransient,
+                isInUserTransaction);
+
+            var validationError = ValidationRunner.ValidateOptions(options, options.EnableValidation, optionsValidator);
+            if (validationError is not null)
+            {
+                throw new DbCallerException(validationError);
+            }
+
+            return new DbExecutor(options, provider, retryPolicy, commandValidator, parameterValidator, bulkImportValidator, linqToDbBulkImporter);
+        }
+        catch (Exception ex)
+        {
+            if (ex is DbCallerException)
+            {
+                throw;
+            }
+
+            throw new DbCallerException(DbErrorMapper.Map(ex), ex);
+        }
     }
 
     #region Public API - Streaming
