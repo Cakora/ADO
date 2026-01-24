@@ -30,17 +30,28 @@ try
 catch (DbCallerException ex)
 {
     // Use structured info instead of parsing messages.
-    switch (ex.ErrorType)
+    if (ex.ErrorCode == DbErrorCode.AuthenticationFailed)
     {
-        case DbErrorType.Timeout:
-            // maybe retry or show timeout-specific message
-            break;
-        case DbErrorType.ConnectionFailure:
-            // handle connection drop (can inspect ex.IsTransient)
-            break;
-        default:
-            // fallback logging; use ex.ErrorCode / ex.MessageKey for localization
-            break;
+        // map to HTTP 401 (API) or show login error (UI)
+    }
+    else if (ex.ErrorType == DbErrorType.Canceled || ex.ErrorCode == DbErrorCode.Canceled)
+    {
+        // request canceled (often map to 499 in APIs)
+    }
+    else
+    {
+        switch (ex.ErrorType)
+        {
+            case DbErrorType.Timeout:
+                // maybe retry or show timeout-specific message
+                break;
+            case DbErrorType.ConnectionFailure:
+                // handle connection drop (can inspect ex.IsTransient)
+                break;
+            default:
+                // fallback logging; use ex.ErrorCode / ex.MessageKey for localization
+                break;
+        }
     }
 
     // Provider diagnostics (non-sensitive) are in ex.ProviderDetails.

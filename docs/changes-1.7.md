@@ -50,3 +50,7 @@ Breaking note (localization only):
 - `DbExecutor.Create(...)` now throws `DbCallerException` for option validation/provider resolution failures (no `DatabaseException` leak from the factory).
 - `DatabaseException` / `ErrorCategory` remain available, but public APIs are standardized to throw `DbCallerException`.
 - `TransactionManager` and `IdentifierWhitelist` now throw `DbCallerException` (no `DatabaseException` leak).
+
+## Documentation
+
+- Updated `src/AdoAsync/README.md` error-handling example to show `DbErrorCode.AuthenticationFailed` and cancel handling.
