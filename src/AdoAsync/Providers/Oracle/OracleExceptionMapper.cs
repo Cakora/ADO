@@ -38,14 +38,14 @@ public static class OracleExceptionMapper
     private static readonly ErrorRule<OracleException>[] Rules =
     {
         // Oracle error numbers are the most reliable cross-version signal.
-        new(ora => ora.Number == 1013, ora => Build(ora, DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.oracle.timeout")),
-        new(ora => ora.Number == 12170, ora => Build(ora, DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.oracle.timeout")),
-        new(ora => ora.Number is 12514 or 12541, ora => Build(ora, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.oracle.connection_failure")),
-        new(ora => ora.Number == 1000, ora => Build(ora, DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, false, "errors.oracle.resource_limit")),
+        new(ora => ora.Number == 1013, ora => Build(ora, DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.timeout")),
+        new(ora => ora.Number == 12170, ora => Build(ora, DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.timeout")),
+        new(ora => ora.Number is 12514 or 12541, ora => Build(ora, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure")),
+        new(ora => ora.Number == 1000, ora => Build(ora, DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, false, "errors.resource_limit")),
 
         // Text-based fallback when no reliable number is present.
         new(ora => ora.Number == 0 && ora.Message.Contains("broken pipe", StringComparison.OrdinalIgnoreCase),
-            ora => Build(ora, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.oracle.connection_broken"))
+            ora => Build(ora, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure"))
     };
     #endregion
 }
