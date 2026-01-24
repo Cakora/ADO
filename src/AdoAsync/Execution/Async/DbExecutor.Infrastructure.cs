@@ -35,7 +35,10 @@ public sealed partial class DbExecutor
     #region Private - Connection
     private async ValueTask EnsureConnectionAsync(CancellationToken cancellationToken)
     {
-        ThrowIfDisposed();
+        if (_disposed)
+        {
+            throw new DatabaseException(ErrorCategory.Disposed, "DbExecutor has been disposed.");
+        }
 
         if (_connection is null)
         {
@@ -75,15 +78,6 @@ public sealed partial class DbExecutor
     #endregion
 
     #region Private - Resilience
-    /// <summary>Throws when the executor has been disposed to avoid using torn state.</summary>
-    private void ThrowIfDisposed()
-    {
-        if (_disposed)
-        {
-            throw new DatabaseException(ErrorCategory.Disposed, "DbExecutor has been disposed.");
-        }
-    }
-
     private Task<T> ExecuteWithRetryIfAllowedAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
     {
         // Never retry inside an explicit user transaction; keep at-most-once semantics.

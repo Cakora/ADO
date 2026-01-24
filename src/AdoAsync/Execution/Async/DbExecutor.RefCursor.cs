@@ -31,7 +31,6 @@ public sealed partial class DbExecutor
     {
         // PostgreSQL refcursors must be fetched within the same transaction that created them.
         // Reuse an existing user transaction when present; otherwise create a local transaction.
-        ThrowIfDisposed();
         await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = _connection ?? throw new DatabaseException(ErrorCategory.State, "Connection was not initialized.");
 

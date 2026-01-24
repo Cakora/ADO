@@ -10,7 +10,6 @@ public sealed partial class DbExecutor
     /// <summary>Begins an explicit transaction on the shared connection (rollback-on-dispose unless committed).</summary>
     public async ValueTask<TransactionHandle> BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
         await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = _connection ?? throw new DatabaseException(ErrorCategory.State, "Connection was not initialized.");
 

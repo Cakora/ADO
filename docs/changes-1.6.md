@@ -28,6 +28,11 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 - `src/AdoAsync/Execution/Async/DbExecutor.cs:292` `public async ValueTask<(List<T> Rows, IReadOnlyDictionary<string, object?> OutputParameters)> QueryAsync<T>(...)`
 - `src/AdoAsync/Execution/Async/DbExecutor.cs:318` `public async ValueTask<(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteDataSetAsync(...)`
 
+## Changed (Query convenience)
+
+- `src/AdoAsync/Execution/DbExecutorQueryExtensions.cs:14` `public static IAsyncEnumerable<T> QueryAsync<T>(this IDbExecutor executor, CommandDefinition command, Func<IDataRecord, T> map, CancellationToken cancellationToken = default)`
+  - Streaming mapping convenience stays as an extension method (built on `IDbExecutor.StreamAsync`).
+
 ## Changed (Output parameter rules)
 
 - `src/AdoAsync/Helpers/ParameterHelper.cs:15` `public static IReadOnlyDictionary<string, object?>? ExtractOutputParameters(DbCommand command, IReadOnlyList<DbParameter>? parameters)`
@@ -48,18 +53,16 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 
 ## Changed (Normalization helpers)
 
-- `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs:32` `public static object? NormalizeByType(this object? value, DbDataType dataType)`
-- `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs:58` `public static T? NormalizeAsNullable<T>(this object? value, DbDataType dataType) where T : struct`
-- `src/AdoAsync/Execution/DbValueNormalizer.cs:7` `internal static class DbValueNormalizer`
-  - Extracted internal normalizer into a dedicated internal file (no mixed namespaces in one source file).
+- `src/AdoAsync/Extensions/Normalization/DbValueNormalizationExtensions.cs:137` `public static object? NormalizeByType(this object? value, DbDataType dataType)`
+- `src/AdoAsync/Extensions/Normalization/DbValueNormalizationExtensions.cs:163` `public static T? NormalizeAsNullable<T>(this object? value, DbDataType dataType) where T : struct`
+- `src/AdoAsync/Extensions/Normalization/DbValueNormalizationExtensions.cs:8` `internal static class DbValueNormalizer`
+  - Internal normalizer + public extensions consolidated into a single file under the Extensions folder.
   - Normalizes `DbDataType.Timestamp` as binary when possible.
 
 ## Performance / Allocation
 
-- `src/AdoAsync/Execution/Async/DbExecutor.Infrastructure.cs:79` `private void ThrowIfDisposed()`
-  - Removes the “fake async” disposed guard (no `ValueTask`/await noise on hot paths).
 - `src/AdoAsync/Execution/Async/DbExecutor.Infrastructure.cs:36` `private async ValueTask EnsureConnectionAsync(CancellationToken cancellationToken)`
-  - Centralized disposed guard at the connection boundary.
+  - Centralized disposed guard at the connection boundary (no extra helper method).
 - `src/AdoAsync/Helpers/ParameterHelper.cs:15` `ExtractOutputParameters(...)`
   - Uses a single `Dictionary` for declared parameter lookup (reduced allocations).
 
@@ -99,14 +102,18 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 - `src/AdoAsync/Extensions/Execution/DataSetExtensions.cs` → `src/AdoAsync/Extensions/DataTable/DataSetExtensions.cs`
 - `src/AdoAsync/Extensions/Execution/MultiResultMapExtensions.cs` → `src/AdoAsync/Extensions/DataTable/MultiResultMapExtensions.cs`
 - `src/AdoAsync/Extensions/Execution/SpanMappingExtensions.cs` → `src/AdoAsync/Extensions/Collections/SpanMappingExtensions.cs`
-- `src/AdoAsync/Extensions/Execution/ValueNormalizationExtensions.cs` → `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs`
-- `src/AdoAsync/Extensions/Execution/NullHandlingExtensions.cs` → `src/AdoAsync/Extensions/Normalization/NullHandlingExtensions.cs`
+- `src/AdoAsync/Extensions/Execution/ValueNormalizationExtensions.cs` → `src/AdoAsync/Extensions/Normalization/DbValueNormalizationExtensions.cs`
+- `src/AdoAsync/Extensions/Execution/NullHandlingExtensions.cs` → `src/AdoAsync/Extensions/Normalization/DbValueNormalizationExtensions.cs`
 
 ## Removed
 
 - `src/AdoAsync/Execution/Async/DbExecutor.Streaming.cs` (moved into `DbExecutor.cs`)
 - `src/AdoAsync/Execution/Async/DbExecutor.ExecutionAndQuery.cs` (duplicate partial removed)
 - `src/AdoAsync/Execution/OutputParameterConverter.cs` (renamed/replaced by internal normalizer; public API remains `NormalizeByType`).
+- `src/AdoAsync/Execution/Async/CommandOwningDbDataReader.cs` (unused wrapper; `StreamingReaderResult` owns command+reader lifetime)
+- `src/AdoAsync/Execution/DbValueNormalizer.cs` (consolidated into `src/AdoAsync/Extensions/Normalization/DbValueNormalizationExtensions.cs`)
+- `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs` (consolidated)
+- `src/AdoAsync/Extensions/Normalization/NullHandlingExtensions.cs` (consolidated)
 - `src/AdoAsync/Extensions/Execution/DataTableOutputExtensions.cs` (removed)
 - `src/AdoAsync/Extensions/Execution/DataSetOutputExtensions.cs` (removed)
 - `src/AdoAsync/Helpers/CursorHelper.cs` `CollectPostgresCursorNames(...)` (removed)

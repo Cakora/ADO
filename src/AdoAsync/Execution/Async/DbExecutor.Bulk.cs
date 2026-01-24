@@ -15,8 +15,6 @@ public sealed partial class DbExecutor
     /// <summary>Bulk import data using provider-specific fast paths.</summary>
     public async ValueTask<BulkImportResult> BulkImportAsync(BulkImportRequest request, CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
-
         var validationError = ValidationRunner.ValidateBulkImport(request, _options.EnableValidation, _bulkImportValidator);
         if (validationError is not null)
         {
@@ -63,7 +61,6 @@ public sealed partial class DbExecutor
         LinqToDbBulkOptions? bulkOptions = null,
         CancellationToken cancellationToken = default) where T : class
     {
-        ThrowIfDisposed();
         Validate.Required(items, nameof(items));
 
         var resolvedOptions = ResolveLinqToDbOptions(bulkOptions);
@@ -104,7 +101,6 @@ public sealed partial class DbExecutor
         LinqToDbBulkOptions? bulkOptions = null,
         CancellationToken cancellationToken = default) where T : class
     {
-        ThrowIfDisposed();
         Validate.Required(items, nameof(items));
 
         var resolvedOptions = ResolveLinqToDbOptions(bulkOptions);

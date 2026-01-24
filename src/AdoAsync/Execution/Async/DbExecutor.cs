@@ -118,7 +118,6 @@ public sealed partial class DbExecutor : IDbExecutor
         string oracleUnsupportedMessage,
         CancellationToken cancellationToken)
     {
-        ThrowIfDisposed();
         var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
@@ -155,7 +154,6 @@ public sealed partial class DbExecutor : IDbExecutor
         CommandDefinition command,
         CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
         var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
@@ -183,7 +181,6 @@ public sealed partial class DbExecutor : IDbExecutor
         CommandDefinition command,
         CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
         var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
@@ -224,7 +221,6 @@ public sealed partial class DbExecutor : IDbExecutor
         CommandDefinition command,
         CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
         var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
@@ -234,8 +230,21 @@ public sealed partial class DbExecutor : IDbExecutor
         if (IsRefCursorCommand(command))
         {
             var (tables, outputs) = await ExecuteRefCursorsWithOutputsAsync(command, cancellationToken).ConfigureAwait(false);
-            var table = tables is { Count: > 0 } ? tables[0] : new DataTable();
-            return (Table: table, OutputParameters: outputs);
+            if (tables is { Count: > 0 })
+            {
+                var table = tables[0];
+
+                // QueryTableAsync returns a single table; dispose any additional tables to avoid leaks.
+                for (var i = 1; i < tables.Count; i++)
+                {
+                    tables[i].Dispose();
+                }
+
+                return (Table: table, OutputParameters: outputs);
+            }
+
+            var empty = new DataTable();
+            return (Table: empty, OutputParameters: outputs);
         }
 
         try
@@ -259,7 +268,6 @@ public sealed partial class DbExecutor : IDbExecutor
         CommandDefinition command,
         CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
         var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
@@ -304,7 +312,14 @@ public sealed partial class DbExecutor : IDbExecutor
         try
         {
             var (table, outputs) = await QueryTableAsync(command, cancellationToken).ConfigureAwait(false);
-            return (Rows: table.ToList(map), OutputParameters: outputs);
+            try
+            {
+                return (Rows: table.ToList(map), OutputParameters: outputs);
+            }
+            finally
+            {
+                table.Dispose();
+            }
         }
         catch (Exception ex)
         {
@@ -319,7 +334,6 @@ public sealed partial class DbExecutor : IDbExecutor
         CommandDefinition command,
         CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
         var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
