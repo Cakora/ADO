@@ -396,25 +396,30 @@ var result = await executor.BulkImportAsync(items, tableName: "dbo.Items");
 
 ## 8) Extensions Used (How Many + What They Do)
 
-This repo contains **12** extension classes (`static class ...Extensions`).
+This repo contains **14** extension classes (`static class ...Extensions`).
 
 ### Public extensions (caller-facing)
 
 - `AdoAsync.DependencyInjection.AdoAsyncServiceCollectionExtensions`
   - DI registration (`AddAdoAsyncFactory`, `AddAdoAsync`, `AddAdoAsyncExecutor`)
+- `AdoAsync.Execution.DbExecutorQueryExtensions`
+  - Streaming mapping convenience: `QueryAsync<T>(...)` (built on `IDbExecutor.StreamAsync`)
 - `AdoAsync.Common.DataRecordExtensions`
   - `IDataRecord.Get<T>(ordinal/name)` (typed getter + conversions)
 - `AdoAsync.Common.DataTableExtensions`
   - DataTable helpers used by callers (CSV/data helpers in Common project)
 - `AdoAsync.Common.CsvExtensions`, `AdoAsync.Common.FileReadExtensions`
 
-### Internal extensions (implementation-only)
+### Advanced conversion/normalization extensions (post-fetch)
 
-Used for mapping performance and normalization inside the library:
+These are public, but intended for intentional post-fetch conversions (they encode memory/behavior tradeoffs). Usage guide:
+
+- `docs/conversion-extensions.md`
 
 - `AdoAsync.Extensions.Execution.DbDataReaderExtensions`
-- `AdoAsync.Extensions.Execution.DataTableExtensions` (internal)
-- `AdoAsync.Extensions.Execution.DataSetExtensions` (internal)
+- `AdoAsync.Extensions.Execution.AsyncEnumerableMaterializerExtensions`
+- `AdoAsync.Extensions.Execution.DataTableExtensions`
+- `AdoAsync.Extensions.Execution.DataSetExtensions`
 - `AdoAsync.Extensions.Execution.MultiResultMapExtensions`
 - `AdoAsync.Extensions.Execution.SpanMappingExtensions`
 - `AdoAsync.Extensions.Execution.ValueNormalizationExtensions`

@@ -11,12 +11,12 @@ Only a small subset is meant to be used directly by application code.
 
 ## Caller-Facing Extensions
 
-## Why Some Extensions Were Internal
+## Why Some Extensions Are "Advanced"
 
-Several extensions in `AdoAsync.Extensions.Execution` were originally marked `internal` intentionally (and are still intended primarily for mapping/normalization, not core database access):
+Several extensions in `AdoAsync.Extensions.Execution` are intended primarily for mapping/materialization/normalization (post-fetch conversions), not core database access:
 
-- They are implementation helpers (performance + allocation control).
-- Keeping them internal prevents the public API from growing with methods we may want to change later.
+- They are low-level helpers (performance + allocation control).
+- They are safe to use, but you should use them intentionally (they encode memory/behavior tradeoffs).
 
 If you are using AdoAsync as a library consumer, you typically **use the public `IDbExecutor` / `DbExecutor` methods**.
 Some mapping helpers are also exposed as extensions so you can map `DataTable` / `DataSet` results without writing `for` loops.
@@ -85,9 +85,9 @@ var name = record.Get<string>("name");
 
 ---
 
-## Internal Extensions (Library-Only) — What They Do + How You Use The Feature
+## Advanced Extensions — What They Do + How You Use The Feature
 
-Below are the internal helpers you listed, with:
+Below are the low-level helpers, with:
 
 - what they do inside the library, and
 - the public way you use that capability from your application code.

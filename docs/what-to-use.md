@@ -78,6 +78,9 @@ await foreach (var customer in executor.QueryAsync(
 Do not use streaming when:
 
 - Provider is `Oracle`
+
+More combinations (streaming + buffered + materializers):
+- `docs/conversion-extensions.md`
 - You need output parameters
 - PostgreSQL/Oracle refcursor procedures (use buffered)
 
@@ -182,6 +185,7 @@ Use:
 These are safe to use after you already have a `DataTable` / `DataSet`:
 
 - `AdoAsync.Extensions.Execution.DataTableExtensions.ToList(...)` (DataTable → List)
+- Docs: `docs/conversion-extensions.md`
 - `AdoAsync.Extensions.Execution.MultiResultMapExtensions.MapTablesToArrays(...)` (DataSet/MultiResult → arrays)
 - `AdoAsync.Extensions.Execution.DataSetExtensions.ToMultiResult(...)` (DataSet → MultiResult)
 
