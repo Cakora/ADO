@@ -73,10 +73,6 @@ public sealed class BulkImportRequestValidator : AbstractValidator<BulkImportReq
         {
             return false;
         }
-        catch (DatabaseException)
-        {
-            return false;
-        }
     }
 
     private static bool EnsureDestinationColumnsAllowed(BulkImportRequest request)
@@ -94,10 +90,6 @@ public sealed class BulkImportRequestValidator : AbstractValidator<BulkImportReq
             return true;
         }
         catch (DbCallerException)
-        {
-            return false;
-        }
-        catch (DatabaseException)
         {
             return false;
         }

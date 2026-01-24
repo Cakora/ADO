@@ -42,10 +42,6 @@ public sealed class CommandDefinitionValidator : AbstractValidator<CommandDefini
         {
             return false;
         }
-        catch (DatabaseException)
-        {
-            return false;
-        }
     }
     #endregion
 }
