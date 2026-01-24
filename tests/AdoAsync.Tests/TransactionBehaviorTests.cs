@@ -78,8 +78,8 @@ public class TransactionBehaviorTests
         var tx1 = await executor.BeginTransactionAsync();
         try
         {
-            var ex = await Assert.ThrowsAsync<AdoAsync.DatabaseException>(() => executor.BeginTransactionAsync().AsTask());
-            ex.Kind.Should().Be(AdoAsync.ErrorCategory.State);
+            var ex = await Assert.ThrowsAsync<AdoAsync.DbCallerException>(() => executor.BeginTransactionAsync().AsTask());
+            ex.MessageKey.Should().Be("errors.state");
         }
         finally
         {

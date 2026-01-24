@@ -97,7 +97,9 @@ public sealed partial class DbExecutor : IDbExecutor
     {
         if (_options.DatabaseType == DatabaseType.Oracle)
         {
-            throw new DatabaseException(ErrorCategory.Unsupported, "Streaming is not supported for Oracle in StreamAsync. Use buffered materialization instead.");
+            throw new DbCallerException(DbErrorMapper.Map(new DatabaseException(
+                ErrorCategory.Unsupported,
+                "Streaming is not supported for Oracle in StreamAsync. Use buffered materialization instead.")));
         }
 
         await using var result = await ExecuteReaderAsync(command, cancellationToken).ConfigureAwait(false);

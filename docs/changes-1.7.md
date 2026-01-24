@@ -38,3 +38,7 @@ Breaking note (localization only):
 ## Changed (Retry guidance)
 
 - SQL Server authentication/login failures (`SqlException.Number` 4060/18456) are now marked non-transient (no retry).
+
+## Changed (Exceptions)
+
+- `DbExecutor.StreamAsync(...)` and `DbExecutor.BeginTransactionAsync(...)` now throw `DbCallerException` (consistent caller-facing exception) instead of leaking `DatabaseException` for unsupported/state cases.

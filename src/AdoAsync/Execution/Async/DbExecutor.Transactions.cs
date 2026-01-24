@@ -10,21 +10,33 @@ public sealed partial class DbExecutor
     /// <summary>Begins an explicit transaction on the shared connection (rollback-on-dispose unless committed).</summary>
     public async ValueTask<TransactionHandle> BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
-        await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
-        var connection = _connection ?? throw new DatabaseException(ErrorCategory.State, "Connection was not initialized.");
-
-        if (_activeTransaction is not null)
+        try
         {
-            throw new DatabaseException(ErrorCategory.State, "A transaction is already active.");
+            await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
+            var connection = _connection ?? throw new DatabaseException(ErrorCategory.State, "Connection was not initialized.");
+
+            if (_activeTransaction is not null)
+            {
+                throw new DbCallerException(DbErrorMapper.Map(new DatabaseException(ErrorCategory.State, "A transaction is already active.")));
+            }
+
+            var transactionManager = new TransactionManager(connection);
+            var handle = await transactionManager
+                .BeginAsync(connection, onDispose: ClearActiveTransaction, cancellationToken)
+                .ConfigureAwait(false);
+
+            _activeTransaction = handle.Transaction;
+            return handle;
         }
+        catch (Exception ex)
+        {
+            if (ex is DbCallerException callerException)
+            {
+                throw callerException;
+            }
 
-        var transactionManager = new TransactionManager(connection);
-        var handle = await transactionManager
-            .BeginAsync(connection, onDispose: ClearActiveTransaction, cancellationToken)
-            .ConfigureAwait(false);
-
-        _activeTransaction = handle.Transaction;
-        return handle;
+            throw new DbCallerException(MapError(ex), ex);
+        }
     }
     #endregion
 
