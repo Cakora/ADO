@@ -120,6 +120,13 @@ public sealed partial class DbExecutor
             return callerException;
         }
 
+        // Internal/library exceptions should always use the caller-facing shape.
+        // WrapProviderExceptions controls only provider/framework exception exposure.
+        if (exception is DatabaseException)
+        {
+            return new DbCallerException(MapError(exception), exception);
+        }
+
         return _options.WrapProviderExceptions
             ? new DbCallerException(MapError(exception), exception)
             : throw exception;

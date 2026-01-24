@@ -42,3 +42,4 @@ Breaking note (localization only):
 ## Changed (Exceptions)
 
 - `DbExecutor.StreamAsync(...)` and `DbExecutor.BeginTransactionAsync(...)` now throw `DbCallerException` (consistent caller-facing exception) instead of leaking `DatabaseException` for unsupported/state cases.
+- Internal `DatabaseException` instances are now always wrapped into `DbCallerException` (even when `DbOptions.WrapProviderExceptions` is false).

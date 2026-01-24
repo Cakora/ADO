@@ -17,7 +17,7 @@ public sealed partial class DbExecutor
 
             if (_activeTransaction is not null)
             {
-                throw new DbCallerException(DbErrorMapper.Map(new DatabaseException(ErrorCategory.State, "A transaction is already active.")));
+                throw new DatabaseException(ErrorCategory.State, "A transaction is already active.");
             }
 
             var transactionManager = new TransactionManager(connection);
@@ -30,12 +30,7 @@ public sealed partial class DbExecutor
         }
         catch (Exception ex)
         {
-            if (ex is DbCallerException callerException)
-            {
-                throw callerException;
-            }
-
-            throw new DbCallerException(MapError(ex), ex);
+            throw WrapException(ex);
         }
     }
     #endregion
