@@ -35,15 +35,13 @@ public static class OracleExceptionMapper
     #region Helpers
     private static DbError Build(OracleException exception, Classification classification)
     {
-        return new DbError
-        {
-            Type = classification.Type,
-            Code = classification.Code,
-            MessageKey = classification.MessageKey,
-            MessageParameters = new[] { exception.Number.ToString(), exception.Message },
-            IsTransient = classification.IsTransient,
-            ProviderDetails = $"OracleException#{exception.Number}"
-        };
+        return DbErrorMapper.FromProvider(
+            classification.Type,
+            classification.Code,
+            classification.MessageKey,
+            new[] { exception.Number.ToString(), exception.Message },
+            classification.IsTransient,
+            $"OracleException#{exception.Number}");
     }
 
     private readonly record struct Classification(DbErrorType Type, DbErrorCode Code, bool IsTransient, string MessageKey);

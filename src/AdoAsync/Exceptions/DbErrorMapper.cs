@@ -9,6 +9,31 @@ namespace AdoAsync;
 public static class DbErrorMapper
 {
     #region Public API
+    /// <summary>
+    /// Creates a provider-mapped error with consistent shape.
+    /// </summary>
+    /// <remarks>
+    /// Internal helper to keep provider mappers small and consistent.
+    /// </remarks>
+    internal static DbError FromProvider(
+        DbErrorType type,
+        DbErrorCode code,
+        string messageKey,
+        IReadOnlyList<string>? messageParameters,
+        bool isTransient,
+        string? providerDetails)
+    {
+        return new DbError
+        {
+            Type = type,
+            Code = code,
+            MessageKey = messageKey,
+            MessageParameters = messageParameters,
+            IsTransient = isTransient,
+            ProviderDetails = providerDetails
+        };
+    }
+
     /// <summary>Returns an unknown error shape for the given exception.</summary>
     public static DbError Unknown(Exception exception)
     {

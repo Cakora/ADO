@@ -35,15 +35,13 @@ public static class SqlServerExceptionMapper
     #region Helpers
     private static DbError Build(SqlException exception, Classification classification)
     {
-        return new DbError
-        {
-            Type = classification.Type,
-            Code = classification.Code,
-            MessageKey = classification.MessageKey,
-            MessageParameters = new[] { exception.Number.ToString(), exception.Message },
-            IsTransient = classification.IsTransient,
-            ProviderDetails = $"SqlException#{exception.Number}"
-        };
+        return DbErrorMapper.FromProvider(
+            classification.Type,
+            classification.Code,
+            classification.MessageKey,
+            new[] { exception.Number.ToString(), exception.Message },
+            classification.IsTransient,
+            $"SqlException#{exception.Number}");
     }
 
     private readonly record struct Classification(DbErrorType Type, DbErrorCode Code, bool IsTransient, string MessageKey);

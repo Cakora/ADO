@@ -36,15 +36,13 @@ public static class PostgreSqlExceptionMapper
     #region Helpers
     private static DbError Build(PostgresException exception, Classification classification)
     {
-        return new DbError
-        {
-            Type = classification.Type,
-            Code = classification.Code,
-            MessageKey = classification.MessageKey,
-            MessageParameters = new[] { exception.SqlState, exception.MessageText ?? exception.Message },
-            IsTransient = classification.IsTransient,
-            ProviderDetails = $"PostgresException#{exception.SqlState}"
-        };
+        return DbErrorMapper.FromProvider(
+            classification.Type,
+            classification.Code,
+            classification.MessageKey,
+            new[] { exception.SqlState, exception.MessageText ?? exception.Message },
+            classification.IsTransient,
+            $"PostgresException#{exception.SqlState}");
     }
 
     private readonly record struct Classification(DbErrorType Type, DbErrorCode Code, bool IsTransient, string MessageKey);
