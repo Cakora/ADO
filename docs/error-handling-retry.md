@@ -57,7 +57,11 @@ The goal is that your API layer can do something like this (pseudo-code):
 ```csharp
 catch (DbCallerException ex)
 {
-    var status = StatusByType.GetValueOrDefault(ex.Error.Type, 500);
+    // Special-case auth failures by stable code (more precise than Type).
+    var status = ex.Error.Code == DbErrorCode.AuthenticationFailed
+        ? StatusCodes.Status401Unauthorized
+        : StatusByType.GetValueOrDefault(ex.Error.Type, 500);
+
     var message = Localize(ex.Error.MessageKey, ex.Error.MessageParameters); // resx later
     return Problem(status, ex.Error.Code.ToString(), message);
 }
