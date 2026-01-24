@@ -100,7 +100,7 @@ public static class DbErrorMapper
             return new DbError
             {
                 Type = DbErrorType.Timeout,
-                Code = DbErrorCode.GenericTimeout,
+                Code = DbErrorCode.Canceled,
                 MessageKey = "errors.canceled",
                 MessageParameters = new[] { exception.Message },
                 IsTransient = isTransientOverride ?? false,

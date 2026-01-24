@@ -60,6 +60,8 @@ public enum DbErrorCode
     #region Values
     /// <summary>Authentication/authorization failure (invalid credentials or login rejected).</summary>
     AuthenticationFailed,
+    /// <summary>Operation was canceled (typically via CancellationToken).</summary>
+    Canceled,
     /// <summary>Timeout occurred.</summary>
     GenericTimeout,
     /// <summary>Deadlock occurred.</summary>

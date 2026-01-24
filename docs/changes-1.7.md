@@ -40,6 +40,7 @@ Breaking note (localization only):
 - SQL Server authentication/login failures (`SqlException.Number` 4060/18456) are now marked non-transient (no retry).
 - Added `DbErrorCode.AuthenticationFailed` and mapped provider authentication failures (SQL Server 4060/18456, PostgreSQL `28P01`, Oracle `ORA-01017`) as non-transient.
   - Middleware can map `DbErrorCode.AuthenticationFailed` to HTTP 401 without parsing provider messages.
+- Added `DbErrorCode.Canceled` (maps `OperationCanceledException`/`TaskCanceledException` to a stable code for middleware handling).
 
 ## Changed (Exceptions)
 
