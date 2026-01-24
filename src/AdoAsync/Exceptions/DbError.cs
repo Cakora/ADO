@@ -58,6 +58,8 @@ public enum DbErrorType
 public enum DbErrorCode
 {
     #region Values
+    /// <summary>Authentication/authorization failure (invalid credentials or login rejected).</summary>
+    AuthenticationFailed,
     /// <summary>Timeout occurred.</summary>
     GenericTimeout,
     /// <summary>Deadlock occurred.</summary>

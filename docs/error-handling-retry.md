@@ -208,6 +208,7 @@ This table is the single “list” to understand retry classification without r
 | SQL Server | `SqlException.Number` | `10928`, `10929` | `ResourceLimit` | true | `errors.resource_limit` |
 | SQL Server | `SqlException.Number` | `4060`, `18456` | `ConnectionFailure` | false (override) | `errors.authentication_failed` |
 | SQL Server | message fallback | contains `"transport-level error"` | `ConnectionFailure` | true | `errors.connection_failure` |
+| PostgreSQL | `PostgresException.SqlState` | `28P01` | `ConnectionFailure` | false (override) | `errors.authentication_failed` |
 | PostgreSQL | `PostgresException.SqlState` | `40P01` | `Deadlock` | true | `errors.deadlock` |
 | PostgreSQL | `PostgresException.SqlState` | `40001` | `Deadlock` | true | `errors.deadlock` |
 | PostgreSQL | `PostgresException.SqlState` | `57014` | `Timeout` | true | `errors.timeout` |
@@ -215,6 +216,7 @@ This table is the single “list” to understand retry classification without r
 | PostgreSQL | `PostgresException.SqlState` | `55P03` | `ResourceLimit` | true | `errors.resource_limit` |
 | PostgreSQL | `PostgresException.SqlState` | `42601` | `SyntaxError` | false | `errors.syntax_error` |
 | PostgreSQL | message fallback | contains `"terminating connection"` | `ConnectionFailure` | true | `errors.connection_failure` |
+| Oracle | `OracleException.Number` | `1017` | `ConnectionFailure` | false (override) | `errors.authentication_failed` |
 | Oracle | `OracleException.Number` | `1013`, `12170` | `Timeout` | true | `errors.timeout` |
 | Oracle | `OracleException.Number` | `12514`, `12541` | `ConnectionFailure` | true | `errors.connection_failure` |
 | Oracle | `OracleException.Number` | `1000` | `ResourceLimit` | false (override) | `errors.resource_limit` |

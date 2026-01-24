@@ -51,6 +51,9 @@ public static class PostgreSqlExceptionMapper
     private static readonly IReadOnlyDictionary<string, Classification> RulesBySqlState =
         new Dictionary<string, Classification>(StringComparer.Ordinal)
         {
+            // Authentication failure (SQLSTATE).
+            ["28P01"] = new(DbErrorType.ConnectionFailure, DbErrorCode.AuthenticationFailed, "errors.authentication_failed", IsTransientOverride: false),
+
             [PostgresErrorCodes.DeadlockDetected] = new(DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, "errors.deadlock"),
             [PostgresErrorCodes.SerializationFailure] = new(DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, "errors.deadlock"),
             [PostgresErrorCodes.QueryCanceled] = new(DbErrorType.Timeout, DbErrorCode.GenericTimeout, "errors.timeout"),

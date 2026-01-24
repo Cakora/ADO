@@ -49,6 +49,8 @@ public static class OracleExceptionMapper
     // Data-first list of retryable/typed Oracle errors (ORA-xxxxx).
     private static readonly IReadOnlyDictionary<int, Classification> RulesByNumber = new Dictionary<int, Classification>
     {
+        // ORA-01017: invalid username/password.
+        [1017] = new(DbErrorType.ConnectionFailure, DbErrorCode.AuthenticationFailed, "errors.authentication_failed", IsTransientOverride: false),
         [1013] = new(DbErrorType.Timeout, DbErrorCode.GenericTimeout, "errors.timeout"),
         [12170] = new(DbErrorType.Timeout, DbErrorCode.GenericTimeout, "errors.timeout"),
         [12514] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, "errors.connection_failure"),
