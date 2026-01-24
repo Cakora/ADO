@@ -18,7 +18,7 @@ public static class IdentifierWhitelist
 
         if (!allowedIdentifiers.Contains(identifier))
         {
-            throw new DatabaseException(ErrorCategory.Validation, $"Identifier '{identifier}' is not in the allowed list.");
+            throw new DbCallerException(DbErrorMapper.Validation($"Identifier '{identifier}' is not in the allowed list."));
         }
     }
 

@@ -69,6 +69,10 @@ public sealed class BulkImportRequestValidator : AbstractValidator<BulkImportReq
             IdentifierWhitelist.EnsureIdentifierAllowed(request.DestinationTable, request.AllowedDestinationTables);
             return true;
         }
+        catch (DbCallerException)
+        {
+            return false;
+        }
         catch (DatabaseException)
         {
             return false;
@@ -88,6 +92,10 @@ public sealed class BulkImportRequestValidator : AbstractValidator<BulkImportReq
         {
             IdentifierWhitelist.EnsureIdentifiersAllowed(destinationColumns, request.AllowedDestinationColumns);
             return true;
+        }
+        catch (DbCallerException)
+        {
+            return false;
         }
         catch (DatabaseException)
         {

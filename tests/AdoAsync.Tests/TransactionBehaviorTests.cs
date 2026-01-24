@@ -45,8 +45,8 @@ public class TransactionBehaviorTests
 
         await using var first = await manager.BeginAsync(connection);
 
-        var ex = await Assert.ThrowsAsync<AdoAsync.DatabaseException>(() => manager.BeginAsync(connection).AsTask());
-        ex.Kind.Should().Be(AdoAsync.ErrorCategory.State);
+        var ex = await Assert.ThrowsAsync<AdoAsync.DbCallerException>(() => manager.BeginAsync(connection).AsTask());
+        ex.MessageKey.Should().Be("errors.state");
     }
 
     [Fact]
@@ -55,8 +55,8 @@ public class TransactionBehaviorTests
         await using var connection = new FakeDbConnection();
         var manager = new AdoAsync.Transactions.TransactionManager(connection);
 
-        var ex = await Assert.ThrowsAsync<AdoAsync.DatabaseException>(() => manager.CommitAsync().AsTask());
-        ex.Kind.Should().Be(AdoAsync.ErrorCategory.State);
+        var ex = await Assert.ThrowsAsync<AdoAsync.DbCallerException>(() => manager.CommitAsync().AsTask());
+        ex.MessageKey.Should().Be("errors.state");
     }
 
     [Fact]

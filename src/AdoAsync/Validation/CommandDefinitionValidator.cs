@@ -38,6 +38,10 @@ public sealed class CommandDefinitionValidator : AbstractValidator<CommandDefini
             IdentifierWhitelist.EnsureIdentifiersAllowed(definition.IdentifiersToValidate, definition.AllowedIdentifiers);
             return true;
         }
+        catch (DbCallerException)
+        {
+            return false;
+        }
         catch (DatabaseException)
         {
             return false;

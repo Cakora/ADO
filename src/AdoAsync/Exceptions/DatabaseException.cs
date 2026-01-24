@@ -9,10 +9,11 @@ namespace AdoAsync;
 /// This exception is primarily used internally within AdoAsync and gets mapped to <see cref="DbError"/>.
 /// Most callers should catch <see cref="DbCallerException"/> instead.
 /// </remarks>
-public sealed class DatabaseException : Exception
+#pragma warning disable S3871 // DatabaseException is intentionally internal (caller-facing shape is DbCallerException).
+internal sealed class DatabaseException : Exception
 {
     /// <summary>High-level reason for the failure.</summary>
-    public ErrorCategory Kind { get; }
+    internal ErrorCategory Kind { get; }
 
     /// <summary>Creates a new database exception with a validation category.</summary>
     public DatabaseException()
@@ -40,9 +41,10 @@ public sealed class DatabaseException : Exception
         Kind = kind;
     }
 }
+#pragma warning restore S3871
 
 /// <summary>Categories for library exceptions.</summary>
-public enum ErrorCategory
+internal enum ErrorCategory
 {
     /// <summary>Validation or input-related failure.</summary>
     Validation,
@@ -54,4 +56,20 @@ public enum ErrorCategory
     State,
     /// <summary>Use-after-dispose or invalid lifetime.</summary>
     Disposed
+}
+
+/// <summary>
+/// Guard helpers for common validation scenarios.
+/// </summary>
+internal static class Validate
+{
+    /// <summary>Throws when the supplied value is null.</summary>
+    public static void Required(object? value, string name)
+    {
+        // Centralized guard to keep error messages consistent.
+        if (value is null)
+        {
+            throw new DbCallerException(DbErrorMapper.Validation($"{name} is required."));
+        }
+    }
 }

@@ -32,12 +32,12 @@ public sealed class TransactionManager : ITransactionManager
     {
         if (!ReferenceEquals(connection, _connection))
         {
-            throw new DatabaseException(ErrorCategory.State, "TransactionManager must use the same connection instance.");
+            throw new DbCallerException(DbErrorMapper.Map(new DatabaseException(ErrorCategory.State, "TransactionManager must use the same connection instance.")));
         }
 
         if (_transaction is not null)
         {
-            throw new DatabaseException(ErrorCategory.State, "Transaction already started.");
+            throw new DbCallerException(DbErrorMapper.Map(new DatabaseException(ErrorCategory.State, "Transaction already started.")));
         }
 
         if (connection.State != ConnectionState.Open)
@@ -52,7 +52,11 @@ public sealed class TransactionManager : ITransactionManager
     /// <summary>Commits the active transaction.</summary>
     public async ValueTask CommitAsync(CancellationToken cancellationToken = default)
     {
-        var transaction = _transaction ?? throw new DatabaseException(ErrorCategory.State, "No active transaction to commit.");
+        var transaction = _transaction;
+        if (transaction is null)
+        {
+            throw new DbCallerException(DbErrorMapper.Map(new DatabaseException(ErrorCategory.State, "No active transaction to commit.")));
+        }
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         _committed = true;
     }
