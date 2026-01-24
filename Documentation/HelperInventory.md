@@ -10,8 +10,7 @@ This file is a living inventory of conversion/normalization helpers. Populate be
 
 ### Buffered / DataTable / DataSet
 - `AdoAsync.Extensions.Execution.DataTableExtensions.ToList<T>(DataTable, Func<DataRow,T>)`
-- `AdoAsync.Extensions.Execution.DataSetExtensions.ToMultiResult(DataSet, IReadOnlyDictionary<string, object?>?)`
-- `AdoAsync.Extensions.Execution.MultiResultMapExtensions` (DataSet/MultiResult → `List<T>`/arrays/collections)
+- `AdoAsync.Extensions.Execution.DataSetMapExtensions` (DataSet → `List<T>`/arrays/collections)
 
 ### Normalization
 - `AdoAsync.Extensions.Execution.ValueNormalizationExtensions.NormalizeByType(object?, DbDataType)`
@@ -22,10 +21,9 @@ This file is a living inventory of conversion/normalization helpers. Populate be
 - `AdoAsync.Extensions.Execution.SpanMappingExtensions.MapToArray<TSource,TDest>(TSource[], Func<TSource,TDest>)`
 
 ## Review (against ConversionGuidelines.md)
-### `MultiResultMapExtensions` (buffered mapping)
+### `DataSetMapExtensions` (buffered mapping)
 - ✅ Aligned: buffered-only, no provider types, mapping is explicit, fast loops (no LINQ per-row).
 - ⚠️ Watch-outs: returns `List<T>`/arrays — acceptable because names encode materialization (`Map...`/`Map...ToArrays`), but keep docs loud about memory/disposal.
 - ✅ Ownership: docs explicitly state caller owns/disposes tables; converters do not dispose.
 - ✅ Grouping rule: no `GroupBy()` usage here (good).
 - Recommendation: keep; any future additions should avoid adding “convenience” overloads that hide materialization.
-

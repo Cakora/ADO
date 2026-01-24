@@ -100,8 +100,7 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 
 - `src/AdoAsync/Extensions/Execution/DbDataReaderExtensions.cs` → `src/AdoAsync/Extensions/DataReader/DbDataReaderExtensions.cs`
 - `src/AdoAsync/Extensions/Execution/DataTableExtensions.cs` → `src/AdoAsync/Extensions/DataTable/DataTableExtensions.cs`
-- `src/AdoAsync/Extensions/Execution/DataSetExtensions.cs` → `src/AdoAsync/Extensions/DataTable/DataSetExtensions.cs`
-- `src/AdoAsync/Extensions/Execution/MultiResultMapExtensions.cs` → `src/AdoAsync/Extensions/DataTable/MultiResultMapExtensions.cs`
+- `src/AdoAsync/Extensions/DataTable/MultiResultMapExtensions.cs` → `src/AdoAsync/Extensions/DataTable/DataSetMapExtensions.cs`
 - `src/AdoAsync/Extensions/Execution/SpanMappingExtensions.cs` → `src/AdoAsync/Extensions/Collections/SpanMappingExtensions.cs`
 - `src/AdoAsync/Extensions/Execution/ValueNormalizationExtensions.cs` → `src/AdoAsync/Extensions/Normalization/DbValueNormalizationExtensions.cs`
 - `src/AdoAsync/Extensions/Execution/NullHandlingExtensions.cs` → `src/AdoAsync/Extensions/Normalization/DbValueNormalizationExtensions.cs`
@@ -112,6 +111,8 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 - `src/AdoAsync/Execution/Async/DbExecutor.ExecutionAndQuery.cs` (duplicate partial removed)
 - `src/AdoAsync/Execution/OutputParameterConverter.cs` (renamed/replaced by internal normalizer; public API remains `NormalizeByType`).
 - `src/AdoAsync/Execution/Async/CommandOwningDbDataReader.cs` (unused wrapper; `StreamingReaderResult` owns command+reader lifetime)
+- `src/AdoAsync/Core/MultiResult.cs` (removed; use `DataSet`/`DataTable` directly)
+- `src/AdoAsync/Extensions/DataTable/DataSetExtensions.cs` (removed; `MultiResult` wrapper not used)
 - `src/AdoAsync/Execution/DbValueNormalizer.cs` (consolidated into `src/AdoAsync/Extensions/Normalization/DbValueNormalizationExtensions.cs`)
 - `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs` (consolidated)
 - `src/AdoAsync/Extensions/Normalization/NullHandlingExtensions.cs` (consolidated)

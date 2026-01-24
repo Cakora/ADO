@@ -17,7 +17,7 @@ The main caller-facing surface area is `AdoAsync.Abstractions.IDbExecutor`, impl
 - `Abstractions/`
   - `IDbExecutor`, `IDbExecutorFactory`, `IDbProvider`
 - `Core/`
-  - `DbOptions`, `CommandDefinition`, `DbParameter`, `DbDataType`, `MultiResult`, etc.
+  - `DbOptions`, `CommandDefinition`, `DbParameter`, `DbDataType`, etc.
 - `Execution/`
   - `Execution/Async/DbExecutor.cs` (main implementation)
   - `Execution/Async/DbExecutor.RefCursor.cs` (refcursor routing and handling)
@@ -396,7 +396,7 @@ var result = await executor.BulkImportAsync(items, tableName: "dbo.Items");
 
 ## 8) Extensions Used (How Many + What They Do)
 
-This repo contains **14** extension classes (`static class ...Extensions`).
+This repo contains **13** extension classes (`static class ...Extensions`).
 
 ### Public extensions (caller-facing)
 
@@ -419,8 +419,7 @@ These are public, but intended for intentional post-fetch conversions (they enco
 - `AdoAsync.Extensions.Execution.DbDataReaderExtensions`
 - `AdoAsync.Extensions.Execution.AsyncEnumerableMaterializerExtensions`
 - `AdoAsync.Extensions.Execution.DataTableExtensions`
-- `AdoAsync.Extensions.Execution.DataSetExtensions`
-- `AdoAsync.Extensions.Execution.MultiResultMapExtensions`
+- `AdoAsync.Extensions.Execution.DataSetMapExtensions`
 - `AdoAsync.Extensions.Execution.SpanMappingExtensions`
 - `AdoAsync.Extensions.Execution.ValueNormalizationExtensions`
 - `AdoAsync.Extensions.Execution.NullHandlingExtensions`

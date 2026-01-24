@@ -30,8 +30,7 @@ Typed getters for streaming mapping live in:
 | `IDbExecutor.ExecuteReaderAsync(...)` | stream mapped rows | `result.Reader.StreamAsync(map, ...)` |
 | `IDbExecutor.ExecuteReaderAsync(...)` | output parameters | `await result.GetOutputParametersAsync()` (after reader is closed) |
 | `IDbExecutor.QueryTableAsync(...)` (`DataTable`) | `List<T>` / `T[]` | `DataTableExtensions.ToList` / `ToArray` |
-| `IDbExecutor.ExecuteDataSetAsync(...)` (`DataSet`) | `MultiResult` | `DataSetExtensions.ToMultiResult(outputs)` |
-| `DataSet` or `MultiResult` | arrays/lists per table | `MultiResultMapExtensions.*` |
+| `IDbExecutor.ExecuteDataSetAsync(...)` (`DataSet`) | arrays/lists per table | `DataSetMapExtensions.*` |
 | `T[]` | fast projection | `SpanMappingExtensions.MapToArray(...)` |
 
 ## 1) Streaming (SQL Server/PostgreSQL)
@@ -168,7 +167,7 @@ finally
 Ownership rule:
 - converters do not dispose tables; caller disposes as soon as mapping is complete.
 
-### B) DataSet → MultiResult → mapped collections
+### B) DataSet → mapped collections
 
 ```csharp
 using AdoAsync.Extensions.Execution;
@@ -176,8 +175,7 @@ using AdoAsync.Extensions.Execution;
 var (dataSet, outputs) = await executor.ExecuteDataSetAsync(command, cancellationToken);
 try
 {
-    var multi = dataSet.ToMultiResult(outputs);
-    var arrays = multi.MapTablesToArrays(row => new Customer((int)row["Id"], (string)row["Name"]));
+    var arrays = dataSet.MapTablesToArrays(row => new Customer((int)row["Id"], (string)row["Name"]));
 }
 finally
 {

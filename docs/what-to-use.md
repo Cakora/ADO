@@ -186,8 +186,7 @@ These are safe to use after you already have a `DataTable` / `DataSet`:
 
 - `AdoAsync.Extensions.Execution.DataTableExtensions.ToList(...)` (DataTable → List)
 - Docs: `docs/conversion-extensions.md`
-- `AdoAsync.Extensions.Execution.MultiResultMapExtensions.MapTablesToArrays(...)` (DataSet/MultiResult → arrays)
-- `AdoAsync.Extensions.Execution.DataSetExtensions.ToMultiResult(...)` (DataSet → MultiResult)
+- `AdoAsync.Extensions.Execution.DataSetMapExtensions.MapTablesToArrays(...)` (DataSet → arrays)
 
 ---
 

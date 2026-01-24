@@ -1,6 +1,6 @@
 # Extensions (How Many, Where, How To Use)
 
-This repo contains **14** extension classes (`static class ...Extensions`) across:
+This repo contains **13** extension classes (`static class ...Extensions`) across:
 
 - `src/AdoAsync/Extensions/...`
 - `src/AdoAsync.Common/...`
@@ -307,7 +307,7 @@ var orders = ordersTable.ToList(row =>
 
 ### 3.1 DataSet → “List of tables” → “List<T> per table”
 
-If you want to map all tables with the same row mapper, use `MultiResultMapExtensions.MapTables(...)` instead of manual loops:
+If you want to map all tables with the same row mapper, use `DataSetMapExtensions.MapTables(...)` instead of manual loops:
 
 ```csharp
 using AdoAsync.Extensions.Execution;
@@ -401,60 +401,12 @@ Where NOT to use this:
 
 - If result is very large and you don’t want memory growth → use streaming `QueryAsync<T>` (IAsyncEnumerable) instead.
 
-### `DataSetExtensions` (convert DataSet → MultiResult)
-
-Internal method:
-
-- `ToMultiResult(DataSet, outputParameters)` → `MultiResult`
-
-Public way to use (get `DataSet` + output parameters):
-
-```csharp
-using AdoAsync.Extensions.Execution;
-
-(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters) dataSetResult =
-    await executor.ExecuteDataSetAsync(new CommandDefinition
-{
-    CommandText = "dbo.GetCustomerAndOrders",
-    CommandType = CommandType.StoredProcedure
-});
-
-var dataSet = dataSetResult.DataSet;
-var outputs = dataSetResult.OutputParameters;
-```
-
-For `QueryTablesAsync` (DbExecutor-only), outputs are not returned because it only returns tables; use `ExecuteDataSetAsync` / `QueryTableAsync` if you need outputs.
-
-When to use DataSet:
-
-- Multi-result stored procedures (SQL Server multi-result / PostgreSQL refcursor / Oracle refcursor)
-- When you need `DataTable` objects (interop, legacy code)
-
-When NOT to use DataSet:
-
-- For large single-result reads where streaming is enough (use `StreamAsync` / `QueryAsync<T>`)
-
-Public way to convert to `MultiResult` (if you use `MultiResult` in your app code):
-
-```csharp
-using AdoAsync.Extensions.Execution;
-
-(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters) dataSetResult =
-    await executor.ExecuteDataSetAsync(new CommandDefinition
-    {
-        CommandText = "dbo.GetCustomerAndOrders",
-        CommandType = CommandType.StoredProcedure
-    });
-
-MultiResult multi = dataSetResult.DataSet.ToMultiResult(dataSetResult.OutputParameters);
-```
-
-### `MultiResultMapExtensions` (fast mapping patterns for buffered multi-results)
+### `DataSetMapExtensions` (fast mapping patterns for buffered multi-results)
 
 Internal methods (examples):
 
 - `dataSet.MapTables(...)` → map each table to list/collection
-- `multiResult.MapTablesToArrays(...)` → fastest mapping to arrays
+- `dataSet.MapTablesToArrays(...)` → fastest mapping to arrays
 
 Public way to use (no manual loops):
 
