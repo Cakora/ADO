@@ -41,6 +41,7 @@ Breaking note (localization only):
 - Added `DbErrorCode.AuthenticationFailed` and mapped provider authentication failures (SQL Server 4060/18456, PostgreSQL `28P01`, Oracle `ORA-01017`) as non-transient.
   - Middleware can map `DbErrorCode.AuthenticationFailed` to HTTP 401 without parsing provider messages.
 - Added `DbErrorCode.Canceled` (maps `OperationCanceledException`/`TaskCanceledException` to a stable code for middleware handling).
+- `OperationCanceledException`/`TaskCanceledException` are now mapped to `DbErrorType.Canceled` (instead of `Timeout`) for cleaner middleware/status handling.
 
 ## Changed (Exceptions)
 

@@ -43,6 +43,7 @@ static readonly IReadOnlyDictionary<DbErrorType, int> StatusByType = new Diction
 {
     [DbErrorType.ValidationError] = StatusCodes.Status400BadRequest,
     [DbErrorType.SyntaxError] = StatusCodes.Status400BadRequest,
+    [DbErrorType.Canceled] = 499, // Client Closed Request (commonly used; not in StatusCodes)
     [DbErrorType.Timeout] = StatusCodes.Status504GatewayTimeout,
     [DbErrorType.ConnectionFailure] = StatusCodes.Status503ServiceUnavailable,
     [DbErrorType.Deadlock] = StatusCodes.Status409Conflict,
@@ -61,7 +62,6 @@ catch (DbCallerException ex)
     var status = ex.Error.Code switch
     {
         DbErrorCode.AuthenticationFailed => StatusCodes.Status401Unauthorized,
-        DbErrorCode.Canceled => 499, // Client Closed Request (commonly used; not in StatusCodes)
         _ => StatusByType.GetValueOrDefault(ex.Error.Type, 500)
     };
 

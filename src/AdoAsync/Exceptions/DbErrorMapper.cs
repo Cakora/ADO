@@ -99,7 +99,7 @@ public static class DbErrorMapper
         {
             return new DbError
             {
-                Type = DbErrorType.Timeout,
+                Type = DbErrorType.Canceled,
                 Code = DbErrorCode.Canceled,
                 MessageKey = "errors.canceled",
                 MessageParameters = new[] { exception.Message },

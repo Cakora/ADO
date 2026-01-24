@@ -37,6 +37,8 @@ public sealed record DbError
 public enum DbErrorType
 {
     #region Values
+    /// <summary>Operation was canceled (typically via CancellationToken).</summary>
+    Canceled,
     /// <summary>Execution timed out.</summary>
     Timeout,
     /// <summary>Deadlock detected.</summary>
