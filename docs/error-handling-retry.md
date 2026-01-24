@@ -14,6 +14,32 @@ This document is a **precise, step-by-step plan** to simplify error handling and
 
 ## Current State (What Exists Today)
 
+### Where HTTP status + localized message should happen
+
+This library is provider-agnostic and runtime-agnostic (API, worker, console), so it **must throw** exceptions and cannot decide HTTP response codes.
+
+Recommended separation:
+
+- **AdoAsync (library):** throws `DbCallerException` containing `DbError` (`Type`/`Code`/`MessageKey`/`MessageParameters`/`IsTransient`).
+- **Application (API middleware):** converts `DbError` into:
+  - HTTP status code (based on `DbErrorType`),
+  - localized message (resx lookup using `MessageKey`),
+  - response payload shape (your API contract).
+
+To keep middleware short and “list-driven”, prefer a dictionary for status mapping (instead of large switch blocks):
+
+```csharp
+static readonly IReadOnlyDictionary<DbErrorType, int> StatusByType = new Dictionary<DbErrorType, int>
+{
+    [DbErrorType.ValidationError] = StatusCodes.Status400BadRequest,
+    [DbErrorType.SyntaxError] = StatusCodes.Status400BadRequest,
+    [DbErrorType.Timeout] = StatusCodes.Status504GatewayTimeout,
+    [DbErrorType.ConnectionFailure] = StatusCodes.Status503ServiceUnavailable,
+    [DbErrorType.Deadlock] = StatusCodes.Status409Conflict,
+    [DbErrorType.ResourceLimit] = StatusCodes.Status429TooManyRequests
+};
+```
+
 ### Retry behavior
 
 - Policy is created in `DbExecutor.Create(...)` via `RetryPolicyFactory.Create(...)`.
@@ -148,4 +174,3 @@ This document is a **precise, step-by-step plan** to simplify error handling and
 - Avoid message-text parsing except as fallback.
 - Retry logic is for **idempotent buffered operations only** and must remain opt-in.
 - All retryable signals must be visible in one place (classifier + this doc).
-
