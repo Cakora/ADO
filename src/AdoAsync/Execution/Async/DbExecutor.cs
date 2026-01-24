@@ -118,7 +118,7 @@ public sealed partial class DbExecutor : IDbExecutor
         string oracleUnsupportedMessage,
         CancellationToken cancellationToken)
     {
-        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        ThrowIfDisposed();
         var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
@@ -155,7 +155,7 @@ public sealed partial class DbExecutor : IDbExecutor
         CommandDefinition command,
         CancellationToken cancellationToken = default)
     {
-        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        ThrowIfDisposed();
         var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
@@ -183,7 +183,7 @@ public sealed partial class DbExecutor : IDbExecutor
         CommandDefinition command,
         CancellationToken cancellationToken = default)
     {
-        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        ThrowIfDisposed();
         var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
@@ -224,7 +224,7 @@ public sealed partial class DbExecutor : IDbExecutor
         CommandDefinition command,
         CancellationToken cancellationToken = default)
     {
-        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        ThrowIfDisposed();
         var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
@@ -259,7 +259,7 @@ public sealed partial class DbExecutor : IDbExecutor
         CommandDefinition command,
         CancellationToken cancellationToken = default)
     {
-        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        ThrowIfDisposed();
         var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {
@@ -319,7 +319,7 @@ public sealed partial class DbExecutor : IDbExecutor
         CommandDefinition command,
         CancellationToken cancellationToken = default)
     {
-        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        ThrowIfDisposed();
         var validationError = ValidateCommandDefinition(command);
         if (validationError is not null)
         {

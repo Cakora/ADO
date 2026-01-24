@@ -10,16 +10,18 @@ public sealed partial class DbExecutor
     /// <summary>Begins an explicit transaction on the shared connection (rollback-on-dispose unless committed).</summary>
     public async ValueTask<TransactionHandle> BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
-        await EnsureReadyAsync(cancellationToken).ConfigureAwait(false);
+        ThrowIfDisposed();
+        await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = _connection ?? throw new DatabaseException(ErrorCategory.State, "Connection was not initialized.");
 
         if (_activeTransaction is not null)
         {
             throw new DatabaseException(ErrorCategory.State, "A transaction is already active.");
         }
 
-        var transactionManager = new TransactionManager(_connection!);
+        var transactionManager = new TransactionManager(connection);
         var handle = await transactionManager
-            .BeginAsync(_connection!, onDispose: ClearActiveTransaction, cancellationToken)
+            .BeginAsync(connection, onDispose: ClearActiveTransaction, cancellationToken)
             .ConfigureAwait(false);
 
         _activeTransaction = handle.Transaction;

@@ -20,13 +20,13 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 ## Changed (Executor methods / locations)
 
 - `src/AdoAsync/Execution/Async/DbExecutor.cs:87` `public async ValueTask<StreamingReaderResult> ExecuteReaderAsync(CommandDefinition command, CancellationToken cancellationToken = default)`
-- `src/AdoAsync/Execution/Async/DbExecutor.cs:98` `public async IAsyncEnumerable<IDataRecord> StreamAsync(CommandDefinition command, CancellationToken cancellationToken = default)`
-- `src/AdoAsync/Execution/Async/DbExecutor.cs:170` `public async ValueTask<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteAsync(...)`
-- `src/AdoAsync/Execution/Async/DbExecutor.cs:198` `public async ValueTask<(T Value, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteScalarAsync<T>(...)`
-- `src/AdoAsync/Execution/Async/DbExecutor.cs:239` `public async ValueTask<(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTableAsync(...)`
-- `src/AdoAsync/Execution/Async/DbExecutor.cs:274` `public async ValueTask<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTablesAsync(...)`
-- `src/AdoAsync/Execution/Async/DbExecutor.cs:308` `public async ValueTask<(List<T> Rows, IReadOnlyDictionary<string, object?> OutputParameters)> QueryAsync<T>(...)`
-- `src/AdoAsync/Execution/Async/DbExecutor.cs:334` `public async ValueTask<(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteDataSetAsync(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:100` `public async IAsyncEnumerable<IDataRecord> StreamAsync(CommandDefinition command, CancellationToken cancellationToken = default)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:154` `public async ValueTask<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteAsync(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:182` `public async ValueTask<(T Value, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteScalarAsync<T>(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:223` `public async ValueTask<(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTableAsync(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:258` `public async ValueTask<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTablesAsync(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:292` `public async ValueTask<(List<T> Rows, IReadOnlyDictionary<string, object?> OutputParameters)> QueryAsync<T>(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.cs:318` `public async ValueTask<(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteDataSetAsync(...)`
 
 ## Changed (Output parameter rules)
 
@@ -39,22 +39,27 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 
 ## Changed (Refcursor policy)
 
-- `src/AdoAsync/Execution/Async/DbExecutor.RefCursor.cs:35` `private async ValueTask<T> WithTransactionScopeAsync<T>(CancellationToken cancellationToken, Func<DbTransaction, Task<T>> action)`
+- `src/AdoAsync/Execution/Async/DbExecutor.RefCursor.cs:30` `private async ValueTask<T> WithTransactionScopeAsync<T>(CancellationToken cancellationToken, Func<DbTransaction, Task<T>> action)`
   - Reuses active user transaction if present; otherwise creates a local transaction for PostgreSQL refcursor fetching.
-- `src/AdoAsync/Execution/Async/DbExecutor.RefCursor.cs:63` `private async ValueTask<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteOracleRefCursorsWithOutputsAsync(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.RefCursor.cs:60` `private async ValueTask<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteOracleRefCursorsWithOutputsAsync(...)`
   - Policy: do not retry refcursor stored procedures.
-- `src/AdoAsync/Execution/Async/DbExecutor.RefCursor.cs:91` `private async ValueTask<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> ExecutePostgresRefCursorsWithOutputsAsync(...)`
+- `src/AdoAsync/Execution/Async/DbExecutor.RefCursor.cs:87` `private async ValueTask<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> ExecutePostgresRefCursorsWithOutputsAsync(...)`
   - Policy: do not retry (refcursor requires transaction scope).
 
 ## Changed (Normalization helpers)
 
-- `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs:154` `public static object? NormalizeByType(this object? value, DbDataType dataType)`
-- `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs:180` `public static T? NormalizeAsNullable<T>(this object? value, DbDataType dataType) where T : struct`
+- `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs:32` `public static object? NormalizeByType(this object? value, DbDataType dataType)`
+- `src/AdoAsync/Extensions/Normalization/ValueNormalizationExtensions.cs:58` `public static T? NormalizeAsNullable<T>(this object? value, DbDataType dataType) where T : struct`
+- `src/AdoAsync/Execution/DbValueNormalizer.cs:7` `internal static class DbValueNormalizer`
+  - Extracted internal normalizer into a dedicated internal file (no mixed namespaces in one source file).
+  - Normalizes `DbDataType.Timestamp` as binary when possible.
 
 ## Performance / Allocation
 
-- `src/AdoAsync/Execution/Async/DbExecutor.Infrastructure.cs:82` `private ValueTask EnsureNotDisposedAsync()`
-  - No async state-machine allocation on the hot path (returns `ValueTask.CompletedTask`).
+- `src/AdoAsync/Execution/Async/DbExecutor.Infrastructure.cs:79` `private void ThrowIfDisposed()`
+  - Removes the “fake async” disposed guard (no `ValueTask`/await noise on hot paths).
+- `src/AdoAsync/Execution/Async/DbExecutor.Infrastructure.cs:36` `private async ValueTask EnsureConnectionAsync(CancellationToken cancellationToken)`
+  - Centralized disposed guard at the connection boundary.
 - `src/AdoAsync/Helpers/ParameterHelper.cs:15` `ExtractOutputParameters(...)`
   - Uses a single `Dictionary` for declared parameter lookup (reduced allocations).
 

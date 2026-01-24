@@ -14,19 +14,14 @@ namespace AdoAsync.Execution;
 public sealed partial class DbExecutor
 {
     #region Refcursor - Routing
-    private bool ShouldUseOracleRefCursorPath(CommandDefinition command) =>
-        CursorHelper.IsOracleRefCursor(_options.DatabaseType, command);
-
-    private bool ShouldUsePostgresRefCursorPath(CommandDefinition command) =>
-        CursorHelper.IsPostgresRefCursor(_options.DatabaseType, command);
-
     private bool IsRefCursorCommand(CommandDefinition command) =>
-        ShouldUseOracleRefCursorPath(command) || ShouldUsePostgresRefCursorPath(command);
+        CursorHelper.IsOracleRefCursor(_options.DatabaseType, command) ||
+        CursorHelper.IsPostgresRefCursor(_options.DatabaseType, command);
 
     private ValueTask<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteRefCursorsWithOutputsAsync(
         CommandDefinition command,
         CancellationToken cancellationToken) =>
-        ShouldUseOracleRefCursorPath(command)
+        CursorHelper.IsOracleRefCursor(_options.DatabaseType, command)
             ? ExecuteOracleRefCursorsWithOutputsAsync(command, cancellationToken)
             : ExecutePostgresRefCursorsWithOutputsAsync(command, cancellationToken);
     #endregion
@@ -36,14 +31,16 @@ public sealed partial class DbExecutor
     {
         // PostgreSQL refcursors must be fetched within the same transaction that created them.
         // Reuse an existing user transaction when present; otherwise create a local transaction.
-        await EnsureReadyAsync(cancellationToken).ConfigureAwait(false);
+        ThrowIfDisposed();
+        await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var connection = _connection ?? throw new DatabaseException(ErrorCategory.State, "Connection was not initialized.");
 
         if (_activeTransaction is not null)
         {
             return await action(_activeTransaction).ConfigureAwait(false);
         }
 
-        await using var transaction = await _connection!.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var result = await action(transaction).ConfigureAwait(false);
@@ -69,7 +66,6 @@ public sealed partial class DbExecutor
             // Policy: do not retry refcursor stored procedures.
             // Even when the provider doesn't require an explicit transaction (Oracle),
             // stored procedures can have side effects and retries can duplicate work.
-            await EnsureNotDisposedAsync().ConfigureAwait(false);
             await using var dbCommand = await CreateCommandAsync(command, cancellationToken).ConfigureAwait(false);
             await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
@@ -96,24 +92,16 @@ public sealed partial class DbExecutor
         {
             // Policy: never retry when a transaction scope is required.
             // PostgreSQL refcursors require a transaction; retry would re-run the stored procedure and can duplicate side effects.
-            return await ExecutePostgresRefCursorsWithOutputsCoreAsync(command, cancellationToken).ConfigureAwait(false);
+            return await WithTransactionScopeAsync(
+                    cancellationToken,
+                    tx => ExecutePostgresRefCursorsInTransactionAsync(command, tx, cancellationToken))
+                .ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             var error = MapError(ex);
             throw new DbCallerException(error, ex);
         }
-    }
-
-    private async Task<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> ExecutePostgresRefCursorsWithOutputsCoreAsync(
-        CommandDefinition command,
-        CancellationToken cancellationToken)
-    {
-        // Always ensure a transaction for opening + fetching the cursors.
-        return await WithTransactionScopeAsync(
-                cancellationToken,
-                tx => ExecutePostgresRefCursorsInTransactionAsync(command, tx, cancellationToken))
-            .ConfigureAwait(false);
     }
 
     private async Task<(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters)> ExecutePostgresRefCursorsInTransactionAsync(
@@ -125,8 +113,9 @@ public sealed partial class DbExecutor
         dbCommand.Transaction = transaction;
         await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
+        var connection = _connection ?? throw new DatabaseException(ErrorCategory.State, "Connection was not initialized.");
         var tables = await PostgreSqlProvider
-            .ReadRefCursorResultsAsync(dbCommand, _connection!, transaction, cancellationToken)
+            .ReadRefCursorResultsAsync(dbCommand, connection, transaction, cancellationToken)
             .ConfigureAwait(false);
 
         var outputs = ExtractOutputParametersOrEmpty(dbCommand, command.Parameters);

@@ -23,7 +23,7 @@ public sealed class TransactionManager : ITransactionManager
     public TransactionManager(DbConnection connection)
     {
         Validate.Required(connection, nameof(connection));
-        _connection = connection!;
+        _connection = connection;
     }
     #endregion
 

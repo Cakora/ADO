@@ -15,7 +15,7 @@ public sealed partial class DbExecutor
     /// <summary>Bulk import data using provider-specific fast paths.</summary>
     public async ValueTask<BulkImportResult> BulkImportAsync(BulkImportRequest request, CancellationToken cancellationToken = default)
     {
-        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        ThrowIfDisposed();
 
         var validationError = ValidationRunner.ValidateBulkImport(request, _options.EnableValidation, _bulkImportValidator);
         if (validationError is not null)
@@ -28,6 +28,7 @@ public sealed partial class DbExecutor
             return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
                 await EnsureConnectionAsync(ct).ConfigureAwait(false);
+                var connection = _connection ?? throw new DatabaseException(ErrorCategory.State, "Connection was not initialized.");
                 var started = Stopwatch.StartNew();
                 var normalizedRequest = request;
                 if (_options.DatabaseType == DatabaseType.Oracle)
@@ -38,7 +39,7 @@ public sealed partial class DbExecutor
                     };
                 }
 
-                var rows = await _provider.BulkImportAsync(_connection!, _activeTransaction, normalizedRequest, ct).ConfigureAwait(false);
+                var rows = await _provider.BulkImportAsync(connection, _activeTransaction, normalizedRequest, ct).ConfigureAwait(false);
                 started.Stop();
                 return new BulkImportResult
                 {
@@ -62,7 +63,7 @@ public sealed partial class DbExecutor
         LinqToDbBulkOptions? bulkOptions = null,
         CancellationToken cancellationToken = default) where T : class
     {
-        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        ThrowIfDisposed();
         Validate.Required(items, nameof(items));
 
         var resolvedOptions = ResolveLinqToDbOptions(bulkOptions);
@@ -77,8 +78,9 @@ public sealed partial class DbExecutor
             return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
                 await EnsureConnectionAsync(ct).ConfigureAwait(false);
+                var connection = _connection ?? throw new DatabaseException(ErrorCategory.State, "Connection was not initialized.");
                 var started = Stopwatch.StartNew();
-                var rows = await _linqToDbBulkImporter.BulkImportAsync(_connection!, _activeTransaction, items, resolvedOptions, _options.CommandTimeoutSeconds, tableName, ct).ConfigureAwait(false);
+                var rows = await _linqToDbBulkImporter.BulkImportAsync(connection, _activeTransaction, items, resolvedOptions, _options.CommandTimeoutSeconds, tableName, ct).ConfigureAwait(false);
                 started.Stop();
                 return new BulkImportResult
                 {
@@ -102,7 +104,7 @@ public sealed partial class DbExecutor
         LinqToDbBulkOptions? bulkOptions = null,
         CancellationToken cancellationToken = default) where T : class
     {
-        await EnsureNotDisposedAsync().ConfigureAwait(false);
+        ThrowIfDisposed();
         Validate.Required(items, nameof(items));
 
         var resolvedOptions = ResolveLinqToDbOptions(bulkOptions);
@@ -117,8 +119,9 @@ public sealed partial class DbExecutor
             return await ExecuteWithRetryIfAllowedAsync(async ct =>
             {
                 await EnsureConnectionAsync(ct).ConfigureAwait(false);
+                var connection = _connection ?? throw new DatabaseException(ErrorCategory.State, "Connection was not initialized.");
                 var started = Stopwatch.StartNew();
-                var rows = await _linqToDbBulkImporter.BulkImportAsync(_connection!, _activeTransaction, items, resolvedOptions, _options.CommandTimeoutSeconds, tableName, ct).ConfigureAwait(false);
+                var rows = await _linqToDbBulkImporter.BulkImportAsync(connection, _activeTransaction, items, resolvedOptions, _options.CommandTimeoutSeconds, tableName, ct).ConfigureAwait(false);
                 started.Stop();
                 return new BulkImportResult
                 {

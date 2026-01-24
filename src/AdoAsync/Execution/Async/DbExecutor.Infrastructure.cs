@@ -33,14 +33,10 @@ public sealed partial class DbExecutor
     #endregion
 
     #region Private - Connection
-    private async ValueTask EnsureReadyAsync(CancellationToken cancellationToken)
-    {
-        await EnsureNotDisposedAsync().ConfigureAwait(false);
-        await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
-    }
-
     private async ValueTask EnsureConnectionAsync(CancellationToken cancellationToken)
     {
+        ThrowIfDisposed();
+
         if (_connection is null)
         {
             _connection = _options.DataSource is not null
@@ -57,7 +53,8 @@ public sealed partial class DbExecutor
     private async ValueTask<DbCommand> CreateCommandAsync(CommandDefinition definition, CancellationToken cancellationToken)
     {
         await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
-        var dbCommand = _provider.CreateCommand(_connection!, definition);
+        var connection = _connection ?? throw new DatabaseException(ErrorCategory.State, "Connection was not initialized.");
+        var dbCommand = _provider.CreateCommand(connection, definition);
         if (_activeTransaction is not null)
         {
             dbCommand.Transaction = _activeTransaction;
@@ -79,14 +76,12 @@ public sealed partial class DbExecutor
 
     #region Private - Resilience
     /// <summary>Throws when the executor has been disposed to avoid using torn state.</summary>
-    private ValueTask EnsureNotDisposedAsync()
+    private void ThrowIfDisposed()
     {
         if (_disposed)
         {
             throw new DatabaseException(ErrorCategory.Disposed, "DbExecutor has been disposed.");
         }
-
-        return ValueTask.CompletedTask;
     }
 
     private Task<T> ExecuteWithRetryIfAllowedAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
