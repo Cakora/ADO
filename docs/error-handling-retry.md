@@ -2,6 +2,16 @@
 
 This document is a **precise, step-by-step plan** to simplify error handling and retry logic while keeping the public API clean and extensible for future localization (resx).
 
+## Problem We’re Solving (Why This Exists)
+
+We want **clean code** with **no “1000-line error layer”** inside the library.
+
+The design target is:
+
+- Library code stays small and consistent.
+- API apps can handle errors in ~10 lines using `DbErrorType`/`DbErrorCode`.
+- Localization stays outside the library (middleware can use resx when needed).
+
 ## Goals (Non-Negotiable)
 
 - Keep public surface small: **`DbCallerException` + `DbError`**.
@@ -39,6 +49,26 @@ static readonly IReadOnlyDictionary<DbErrorType, int> StatusByType = new Diction
     [DbErrorType.ResourceLimit] = StatusCodes.Status429TooManyRequests
 };
 ```
+
+### Minimal “10-line” middleware shape (target)
+
+The goal is that your API layer can do something like this (pseudo-code):
+
+```csharp
+catch (DbCallerException ex)
+{
+    var status = StatusByType.GetValueOrDefault(ex.Error.Type, 500);
+    var message = Localize(ex.Error.MessageKey, ex.Error.MessageParameters); // resx later
+    return Problem(status, ex.Error.Code.ToString(), message);
+}
+```
+
+This stays tiny because the library already provides the meaning:
+
+- `DbErrorType` → which kind of failure
+- `DbErrorCode` → stable code for client logic
+- `MessageKey` → stable localization key (optional now, useful later)
+- `IsTransient` → retry hint (buffered only, no transaction)
 
 ### Retry behavior
 
@@ -87,6 +117,17 @@ static readonly IReadOnlyDictionary<DbErrorType, int> StatusByType = new Diction
 - `RetryableSignals` table (per provider).
 - List of “retry-enabled” methods.
 - List of duplicated patterns to remove.
+
+### 1.1) Identify the “minimum set” (stop the complexity early)
+
+**Objective:** prevent over-engineering before refactor begins.
+
+1. Decide which error types we *actually* need for retry + API mapping:
+   - Usually: Timeout, Deadlock, ConnectionFailure, ResourceLimit (transient)
+   - Usually: ValidationError, SyntaxError (non-transient)
+   - Everything else → Unknown
+2. Anything outside that set must justify itself:
+   - If it doesn’t change retry decision or API behavior, don’t add it.
 
 ### 2) Define the Minimal Target Design (WRITE THIS DOWN BEFORE REFACTOR)
 
@@ -174,3 +215,10 @@ static readonly IReadOnlyDictionary<DbErrorType, int> StatusByType = new Diction
 - Avoid message-text parsing except as fallback.
 - Retry logic is for **idempotent buffered operations only** and must remain opt-in.
 - All retryable signals must be visible in one place (classifier + this doc).
+
+## Non-Goals (What We Will Not Do)
+
+- No huge “error framework” inside the library.
+- No API-specific dependencies (no HTTP types, no middleware inside AdoAsync).
+- No retry for streaming.
+- No retry inside transactions.
