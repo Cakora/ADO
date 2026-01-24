@@ -197,6 +197,29 @@ This stays tiny because the library already provides the meaning:
 **Deliverables (end of step 6):**
 - “Retry Matrix” table in this doc.
 
+#### Retry Matrix (current mapping)
+
+This table is the single “list” to understand retry classification without reading code.
+
+| Provider | Signal | Example values | Mapped `DbErrorType` | `IsTransient` (retry hint) | MessageKey |
+|---|---|---|---|---:|---|
+| SQL Server | `SqlException.Number` | `1205` | `Deadlock` | true | `errors.deadlock` |
+| SQL Server | `SqlException.Number` | `-2` | `Timeout` | true | `errors.timeout` |
+| SQL Server | `SqlException.Number` | `10928`, `10929` | `ResourceLimit` | true | `errors.resource_limit` |
+| SQL Server | `SqlException.Number` | `4060`, `18456` | `ConnectionFailure` | true | `errors.authentication_failed` |
+| SQL Server | message fallback | contains `"transport-level error"` | `ConnectionFailure` | true | `errors.connection_failure` |
+| PostgreSQL | `PostgresException.SqlState` | `40P01` | `Deadlock` | true | `errors.deadlock` |
+| PostgreSQL | `PostgresException.SqlState` | `40001` | `Deadlock` | true | `errors.deadlock` |
+| PostgreSQL | `PostgresException.SqlState` | `57014` | `Timeout` | true | `errors.timeout` |
+| PostgreSQL | `PostgresException.SqlState` | `08000` | `ConnectionFailure` | true | `errors.connection_failure` |
+| PostgreSQL | `PostgresException.SqlState` | `55P03` | `ResourceLimit` | true | `errors.resource_limit` |
+| PostgreSQL | `PostgresException.SqlState` | `42601` | `SyntaxError` | false | `errors.syntax_error` |
+| PostgreSQL | message fallback | contains `"terminating connection"` | `ConnectionFailure` | true | `errors.connection_failure` |
+| Oracle | `OracleException.Number` | `1013`, `12170` | `Timeout` | true | `errors.timeout` |
+| Oracle | `OracleException.Number` | `12514`, `12541` | `ConnectionFailure` | true | `errors.connection_failure` |
+| Oracle | `OracleException.Number` | `1000` | `ResourceLimit` | false | `errors.resource_limit` |
+| Oracle | message fallback | contains `"broken pipe"` | `ConnectionFailure` | true | `errors.connection_failure` |
+
 ### 7) Validation + Safety Checks
 
 **Objective:** ensure we didn’t break behavior.

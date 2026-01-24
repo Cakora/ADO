@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Data.SqlClient;
 
 namespace AdoAsync.Providers.SqlServer;
@@ -17,35 +18,52 @@ public static class SqlServerExceptionMapper
             return DbErrorMapper.Map(exception);
         }
 
-        return ErrorRuleMatcher.Map(sqlEx, Rules, ex => DbErrorMapper.Map(ex));
+        if (RulesByNumber.TryGetValue(sqlEx.Number, out var rule))
+        {
+            return Build(sqlEx, rule);
+        }
+
+        if (sqlEx.Number == 0 && sqlEx.Message.Contains("transport-level error", StringComparison.OrdinalIgnoreCase))
+        {
+            return Build(sqlEx, new Classification(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure"));
+        }
+
+        return DbErrorMapper.Map(sqlEx);
     }
     #endregion
 
     #region Helpers
-    private static DbError Build(SqlException exception, DbErrorType type, DbErrorCode code, bool isTransient, string messageKey)
+    private static DbError Build(SqlException exception, Classification classification)
     {
         return new DbError
         {
-            Type = type,
-            Code = code,
-            MessageKey = messageKey,
+            Type = classification.Type,
+            Code = classification.Code,
+            MessageKey = classification.MessageKey,
             MessageParameters = new[] { exception.Number.ToString(), exception.Message },
-            IsTransient = isTransient,
+            IsTransient = classification.IsTransient,
             ProviderDetails = $"SqlException#{exception.Number}"
         };
     }
 
-    private static readonly ErrorRule<SqlException>[] Rules =
-    {
-        // Numeric rules
-        new(sql => sql.Number is 4060 or 18456, sql => Build(sql, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.authentication_failed")),
-        new(sql => sql.Number == 1205, sql => Build(sql, DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, true, "errors.deadlock")),
-        new(sql => sql.Number is 10928 or 10929, sql => Build(sql, DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, true, "errors.resource_limit")),
-        new(sql => sql.Number == -2, sql => Build(sql, DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.timeout")),
+    private readonly record struct Classification(DbErrorType Type, DbErrorCode Code, bool IsTransient, string MessageKey);
 
-        // Text-based rule for when no numeric code is set.
-        new(sql => sql.Number == 0 && sql.Message.Contains("transport-level error", StringComparison.OrdinalIgnoreCase),
-            sql => Build(sql, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure"))
+    // Data-first list of retryable/typed SQL Server errors.
+    private static readonly IReadOnlyDictionary<int, Classification> RulesByNumber = new Dictionary<int, Classification>
+    {
+        // Login/connection issues
+        [4060] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.authentication_failed"),
+        [18456] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.authentication_failed"),
+
+        // Deadlock
+        [1205] = new(DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, true, "errors.deadlock"),
+
+        // Resource throttling
+        [10928] = new(DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, true, "errors.resource_limit"),
+        [10929] = new(DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, true, "errors.resource_limit"),
+
+        // Timeout
+        [-2] = new(DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.timeout")
     };
     #endregion
 }

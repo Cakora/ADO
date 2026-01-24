@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Oracle.ManagedDataAccess.Client;
 
 namespace AdoAsync.Providers.Oracle;
@@ -17,35 +18,46 @@ public static class OracleExceptionMapper
             return DbErrorMapper.Map(exception);
         }
 
-        return ErrorRuleMatcher.Map(oraEx, Rules, ex => DbErrorMapper.Map(ex));
+        if (RulesByNumber.TryGetValue(oraEx.Number, out var rule))
+        {
+            return Build(oraEx, rule);
+        }
+
+        if (oraEx.Number == 0 && oraEx.Message.Contains("broken pipe", StringComparison.OrdinalIgnoreCase))
+        {
+            return Build(oraEx, new Classification(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure"));
+        }
+
+        return DbErrorMapper.Map(oraEx);
     }
     #endregion
 
     #region Helpers
-    private static DbError Build(OracleException exception, DbErrorType type, DbErrorCode code, bool isTransient, string messageKey)
+    private static DbError Build(OracleException exception, Classification classification)
     {
         return new DbError
         {
-            Type = type,
-            Code = code,
-            MessageKey = messageKey,
+            Type = classification.Type,
+            Code = classification.Code,
+            MessageKey = classification.MessageKey,
             MessageParameters = new[] { exception.Number.ToString(), exception.Message },
-            IsTransient = isTransient,
+            IsTransient = classification.IsTransient,
             ProviderDetails = $"OracleException#{exception.Number}"
         };
     }
 
-    private static readonly ErrorRule<OracleException>[] Rules =
-    {
-        // Oracle error numbers are the most reliable cross-version signal.
-        new(ora => ora.Number == 1013, ora => Build(ora, DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.timeout")),
-        new(ora => ora.Number == 12170, ora => Build(ora, DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.timeout")),
-        new(ora => ora.Number is 12514 or 12541, ora => Build(ora, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure")),
-        new(ora => ora.Number == 1000, ora => Build(ora, DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, false, "errors.resource_limit")),
+    private readonly record struct Classification(DbErrorType Type, DbErrorCode Code, bool IsTransient, string MessageKey);
 
-        // Text-based fallback when no reliable number is present.
-        new(ora => ora.Number == 0 && ora.Message.Contains("broken pipe", StringComparison.OrdinalIgnoreCase),
-            ora => Build(ora, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure"))
+    // Data-first list of retryable/typed Oracle errors (ORA-xxxxx).
+    private static readonly IReadOnlyDictionary<int, Classification> RulesByNumber = new Dictionary<int, Classification>
+    {
+        [1013] = new(DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.timeout"),
+        [12170] = new(DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.timeout"),
+        [12514] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure"),
+        [12541] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure"),
+
+        // ORA-01000: maximum open cursors exceeded (not typically resolved by immediate retry).
+        [1000] = new(DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, false, "errors.resource_limit")
     };
     #endregion
 }

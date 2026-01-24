@@ -26,3 +26,7 @@ Breaking note (localization only):
 
 - If your application had provider-specific resx entries (e.g., `errors.sqlserver.deadlock`), update them to the generic keys above.
 
+## Refactor (Provider mappers)
+
+- Simplified provider exception mappers to be “data-first” (small code/SQLSTATE lists) instead of rule-engine style matching.
+- Removed `src/AdoAsync/Exceptions/ErrorRuleMatcher.cs` (no longer needed).

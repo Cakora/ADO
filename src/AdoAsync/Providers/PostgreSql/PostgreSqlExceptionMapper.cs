@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Npgsql;
 
 namespace AdoAsync.Providers.PostgreSql;
@@ -17,37 +18,50 @@ public static class PostgreSqlExceptionMapper
             return DbErrorMapper.Map(exception);
         }
 
-        return ErrorRuleMatcher.Map(pgEx, Rules, ex => DbErrorMapper.Map(ex));
+        var sqlState = pgEx.SqlState;
+        if (!string.IsNullOrWhiteSpace(sqlState) && RulesBySqlState.TryGetValue(sqlState, out var rule))
+        {
+            return Build(pgEx, rule);
+        }
+
+        if (string.IsNullOrWhiteSpace(sqlState) && (pgEx.MessageText ?? pgEx.Message).Contains("terminating connection", StringComparison.OrdinalIgnoreCase))
+        {
+            return Build(pgEx, new Classification(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure"));
+        }
+
+        return DbErrorMapper.Map(pgEx);
     }
     #endregion
 
     #region Helpers
-    private static DbError Build(PostgresException exception, DbErrorType type, DbErrorCode code, bool isTransient, string messageKey)
+    private static DbError Build(PostgresException exception, Classification classification)
     {
         return new DbError
         {
-            Type = type,
-            Code = code,
-            MessageKey = messageKey,
+            Type = classification.Type,
+            Code = classification.Code,
+            MessageKey = classification.MessageKey,
             MessageParameters = new[] { exception.SqlState, exception.MessageText ?? exception.Message },
-            IsTransient = isTransient,
+            IsTransient = classification.IsTransient,
             ProviderDetails = $"PostgresException#{exception.SqlState}"
         };
     }
 
-    private static readonly ErrorRule<PostgresException>[] Rules =
-    {
-        // SQLSTATE values are stable across PostgreSQL versions.
-        new(pg => pg.SqlState == PostgresErrorCodes.DeadlockDetected, pg => Build(pg, DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, true, "errors.deadlock")),
-        new(pg => pg.SqlState == PostgresErrorCodes.LockNotAvailable, pg => Build(pg, DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, true, "errors.resource_limit")),
-        new(pg => pg.SqlState == PostgresErrorCodes.SerializationFailure, pg => Build(pg, DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, true, "errors.deadlock")),
-        new(pg => pg.SqlState == PostgresErrorCodes.QueryCanceled, pg => Build(pg, DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.timeout")),
-        new(pg => pg.SqlState == PostgresErrorCodes.ConnectionException, pg => Build(pg, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure")),
-        new(pg => pg.SqlState == PostgresErrorCodes.SyntaxError, pg => Build(pg, DbErrorType.SyntaxError, DbErrorCode.SyntaxError, false, "errors.syntax_error")),
+    private readonly record struct Classification(DbErrorType Type, DbErrorCode Code, bool IsTransient, string MessageKey);
 
-        // Text-based fallback when SQLSTATE is missing/empty.
-        new(pg => string.IsNullOrWhiteSpace(pg.SqlState) && (pg.MessageText ?? pg.Message).Contains("terminating connection", StringComparison.OrdinalIgnoreCase),
-            pg => Build(pg, DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure"))
-    };
+    // Data-first list of retryable/typed PostgreSQL errors (SQLSTATE).
+    private static readonly IReadOnlyDictionary<string, Classification> RulesBySqlState =
+        new Dictionary<string, Classification>(StringComparer.Ordinal)
+        {
+            [PostgresErrorCodes.DeadlockDetected] = new(DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, true, "errors.deadlock"),
+            [PostgresErrorCodes.SerializationFailure] = new(DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, true, "errors.deadlock"),
+            [PostgresErrorCodes.QueryCanceled] = new(DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.timeout"),
+            [PostgresErrorCodes.ConnectionException] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure"),
+
+            // Not always “transient” in practice, but retry is typically safe for buffered reads/writes without a transaction.
+            [PostgresErrorCodes.LockNotAvailable] = new(DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, true, "errors.resource_limit"),
+
+            [PostgresErrorCodes.SyntaxError] = new(DbErrorType.SyntaxError, DbErrorCode.SyntaxError, false, "errors.syntax_error")
+        };
     #endregion
 }
