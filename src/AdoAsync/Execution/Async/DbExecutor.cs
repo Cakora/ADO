@@ -89,11 +89,7 @@ public sealed partial class DbExecutor : IDbExecutor
         var declaredOutputParameters = ParameterHelper.HasNonRefCursorOutputs(command.Parameters)
             ? command.Parameters
             : null;
-        return await ExecuteReaderCoreAsync(
-            command,
-            declaredOutputParameters: declaredOutputParameters,
-            oracleUnsupportedMessage: "Oracle does not support streaming. Use buffered materialization instead.",
-            cancellationToken).ConfigureAwait(false);
+        return await ExecuteReaderCoreAsync(command, declaredOutputParameters, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Stream rows for a single SELECT.</summary>
@@ -115,7 +111,6 @@ public sealed partial class DbExecutor : IDbExecutor
     private async ValueTask<StreamingReaderResult> ExecuteReaderCoreAsync(
         CommandDefinition command,
         IReadOnlyList<DbParameter>? declaredOutputParameters,
-        string oracleUnsupportedMessage,
         CancellationToken cancellationToken)
     {
         var validationError = ValidateCommandDefinition(command);
@@ -126,7 +121,9 @@ public sealed partial class DbExecutor : IDbExecutor
 
         if (_options.DatabaseType == DatabaseType.Oracle)
         {
-            throw new DbCallerException(DbErrorMapper.Map(new DatabaseException(ErrorCategory.Unsupported, oracleUnsupportedMessage)));
+            throw new DbCallerException(DbErrorMapper.Map(new DatabaseException(
+                ErrorCategory.Unsupported,
+                "Oracle does not support streaming. Use buffered materialization instead.")));
         }
 
         if (CursorHelper.IsPostgresRefCursor(_options.DatabaseType, command))

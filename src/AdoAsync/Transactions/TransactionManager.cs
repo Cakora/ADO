@@ -7,30 +7,23 @@ using AdoAsync.Abstractions;
 
 namespace AdoAsync.Transactions;
 
-/// <summary>
-/// Explicit transaction manager (Approach A) with rollback-on-dispose semantics.
-/// </summary>
+/// <summary>Explicit transaction manager with rollback-on-dispose semantics.</summary>
 public sealed class TransactionManager : ITransactionManager
 {
-    #region Fields
     private readonly DbConnection _connection;
     private DbTransaction? _transaction;
     private bool _committed;
-    #endregion
 
-    #region Constructors
     /// <summary>Creates a transaction manager bound to the provided connection.</summary>
     public TransactionManager(DbConnection connection)
     {
         Validate.Required(connection, nameof(connection));
         _connection = connection;
     }
-    #endregion
 
-    #region Public API
     /// <summary>Begins a transaction on the provided connection.</summary>
-    public async ValueTask<TransactionHandle> BeginAsync(DbConnection connection, CancellationToken cancellationToken = default)
-        => await BeginAsync(connection, onDispose: null, cancellationToken).ConfigureAwait(false);
+    public ValueTask<TransactionHandle> BeginAsync(DbConnection connection, CancellationToken cancellationToken = default)
+        => BeginAsync(connection, onDispose: null, cancellationToken);
 
     internal async ValueTask<TransactionHandle> BeginAsync(
         DbConnection connection,
@@ -49,7 +42,6 @@ public sealed class TransactionManager : ITransactionManager
 
         if (connection.State != ConnectionState.Open)
         {
-            // Ensure the transaction is bound to an open connection.
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -60,24 +52,21 @@ public sealed class TransactionManager : ITransactionManager
     /// <summary>Commits the active transaction.</summary>
     public async ValueTask CommitAsync(CancellationToken cancellationToken = default)
     {
-        if (_transaction is null)
-        {
-            throw new DatabaseException(ErrorCategory.State, "No active transaction to commit.");
-        }
-
-        await _transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        var transaction = _transaction ?? throw new DatabaseException(ErrorCategory.State, "No active transaction to commit.");
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         _committed = true;
     }
 
     /// <summary>Rolls back the active transaction.</summary>
     public async ValueTask RollbackAsync(CancellationToken cancellationToken = default)
     {
-        if (_transaction is null)
+        var transaction = _transaction;
+        if (transaction is null)
         {
             return;
         }
 
-        await _transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Disposes the transaction, rolling back if not committed.</summary>
@@ -91,14 +80,17 @@ public sealed class TransactionManager : ITransactionManager
 
         // Make DisposeAsync idempotent and allow a manager instance to be reused.
         _transaction = null;
+
+        // Snapshot the commit state before resetting it so we know whether rollback is required.
         var committed = _committed;
+
+        // Reset to allow reuse and to avoid leaking previous commit state into a future transaction.
         _committed = false;
 
         try
         {
             if (!committed)
             {
-                // Safety net: avoid leaving open transactions when callers forget to commit.
                 await transaction.RollbackAsync().ConfigureAwait(false);
             }
         }
@@ -107,5 +99,4 @@ public sealed class TransactionManager : ITransactionManager
             await transaction.DisposeAsync().ConfigureAwait(false);
         }
     }
-    #endregion
 }
