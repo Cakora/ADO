@@ -32,3 +32,7 @@ Breaking note (localization only):
 - Removed `src/AdoAsync/Exceptions/ErrorRuleMatcher.cs` (no longer needed).
 - Removed `src/AdoAsync/Exceptions/ExceptionHandler.cs` (directly maps via `ProviderHelper.MapProviderError`).
 - Removed `src/AdoAsync/Exceptions/DbClientException.cs` (legacy alias; use `DbCallerException`).
+
+## Changed (Retry guidance)
+
+- SQL Server authentication/login failures (`SqlException.Number` 4060/18456) are now marked non-transient (no retry).

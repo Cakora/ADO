@@ -50,8 +50,8 @@ public static class SqlServerExceptionMapper
     private static readonly IReadOnlyDictionary<int, Classification> RulesByNumber = new Dictionary<int, Classification>
     {
         // Login/connection issues
-        [4060] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, "errors.authentication_failed"),
-        [18456] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, "errors.authentication_failed"),
+        [4060] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, "errors.authentication_failed", IsTransientOverride: false),
+        [18456] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, "errors.authentication_failed", IsTransientOverride: false),
 
         // Deadlock
         [1205] = new(DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, "errors.deadlock"),

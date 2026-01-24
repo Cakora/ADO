@@ -206,7 +206,7 @@ This table is the single “list” to understand retry classification without r
 | SQL Server | `SqlException.Number` | `1205` | `Deadlock` | true | `errors.deadlock` |
 | SQL Server | `SqlException.Number` | `-2` | `Timeout` | true | `errors.timeout` |
 | SQL Server | `SqlException.Number` | `10928`, `10929` | `ResourceLimit` | true | `errors.resource_limit` |
-| SQL Server | `SqlException.Number` | `4060`, `18456` | `ConnectionFailure` | true | `errors.authentication_failed` |
+| SQL Server | `SqlException.Number` | `4060`, `18456` | `ConnectionFailure` | false (override) | `errors.authentication_failed` |
 | SQL Server | message fallback | contains `"transport-level error"` | `ConnectionFailure` | true | `errors.connection_failure` |
 | PostgreSQL | `PostgresException.SqlState` | `40P01` | `Deadlock` | true | `errors.deadlock` |
 | PostgreSQL | `PostgresException.SqlState` | `40001` | `Deadlock` | true | `errors.deadlock` |
