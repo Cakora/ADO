@@ -164,7 +164,7 @@ public sealed partial class DbExecutor
             return callerException.Error;
         }
 
-        return Exceptions.ExceptionHandler.Map(_options.DatabaseType, exception);
+        return ProviderHelper.MapProviderError(_options.DatabaseType, exception);
     }
     #endregion
 
