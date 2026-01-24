@@ -26,7 +26,7 @@ public static class PostgreSqlExceptionMapper
 
         if (string.IsNullOrWhiteSpace(sqlState) && (pgEx.MessageText ?? pgEx.Message).Contains("terminating connection", StringComparison.OrdinalIgnoreCase))
         {
-            return Build(pgEx, new Classification(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure"));
+            return Build(pgEx, new Classification(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, "errors.connection_failure"));
         }
 
         return DbErrorMapper.Map(pgEx);
@@ -41,25 +41,25 @@ public static class PostgreSqlExceptionMapper
             classification.Code,
             classification.MessageKey,
             new[] { exception.SqlState, exception.MessageText ?? exception.Message },
-            classification.IsTransient,
+            classification.IsTransientOverride ?? DbErrorMapper.IsTransientByType(classification.Type),
             $"PostgresException#{exception.SqlState}");
     }
 
-    private readonly record struct Classification(DbErrorType Type, DbErrorCode Code, bool IsTransient, string MessageKey);
+    private readonly record struct Classification(DbErrorType Type, DbErrorCode Code, string MessageKey, bool? IsTransientOverride = null);
 
     // Data-first list of retryable/typed PostgreSQL errors (SQLSTATE).
     private static readonly IReadOnlyDictionary<string, Classification> RulesBySqlState =
         new Dictionary<string, Classification>(StringComparer.Ordinal)
         {
-            [PostgresErrorCodes.DeadlockDetected] = new(DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, true, "errors.deadlock"),
-            [PostgresErrorCodes.SerializationFailure] = new(DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, true, "errors.deadlock"),
-            [PostgresErrorCodes.QueryCanceled] = new(DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.timeout"),
-            [PostgresErrorCodes.ConnectionException] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure"),
+            [PostgresErrorCodes.DeadlockDetected] = new(DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, "errors.deadlock"),
+            [PostgresErrorCodes.SerializationFailure] = new(DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, "errors.deadlock"),
+            [PostgresErrorCodes.QueryCanceled] = new(DbErrorType.Timeout, DbErrorCode.GenericTimeout, "errors.timeout"),
+            [PostgresErrorCodes.ConnectionException] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, "errors.connection_failure"),
 
             // Not always “transient” in practice, but retry is typically safe for buffered reads/writes without a transaction.
-            [PostgresErrorCodes.LockNotAvailable] = new(DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, true, "errors.resource_limit"),
+            [PostgresErrorCodes.LockNotAvailable] = new(DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, "errors.resource_limit"),
 
-            [PostgresErrorCodes.SyntaxError] = new(DbErrorType.SyntaxError, DbErrorCode.SyntaxError, false, "errors.syntax_error")
+            [PostgresErrorCodes.SyntaxError] = new(DbErrorType.SyntaxError, DbErrorCode.SyntaxError, "errors.syntax_error", IsTransientOverride: false)
         };
     #endregion
 }

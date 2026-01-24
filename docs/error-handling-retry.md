@@ -217,7 +217,7 @@ This table is the single “list” to understand retry classification without r
 | PostgreSQL | message fallback | contains `"terminating connection"` | `ConnectionFailure` | true | `errors.connection_failure` |
 | Oracle | `OracleException.Number` | `1013`, `12170` | `Timeout` | true | `errors.timeout` |
 | Oracle | `OracleException.Number` | `12514`, `12541` | `ConnectionFailure` | true | `errors.connection_failure` |
-| Oracle | `OracleException.Number` | `1000` | `ResourceLimit` | false | `errors.resource_limit` |
+| Oracle | `OracleException.Number` | `1000` | `ResourceLimit` | false (override) | `errors.resource_limit` |
 | Oracle | message fallback | contains `"broken pipe"` | `ConnectionFailure` | true | `errors.connection_failure` |
 
 ### 7) Validation + Safety Checks

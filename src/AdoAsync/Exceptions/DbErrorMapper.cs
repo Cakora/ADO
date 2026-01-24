@@ -34,6 +34,19 @@ public static class DbErrorMapper
         };
     }
 
+    /// <summary>
+    /// Default retry guidance by error type.
+    /// </summary>
+    /// <remarks>
+    /// This is a library-level policy for buffered operations when retries are enabled and no transaction is active.
+    /// Providers may override this in rare cases when a specific code is not safely retryable.
+    /// </remarks>
+    internal static bool IsTransientByType(DbErrorType type) =>
+        type is DbErrorType.Timeout
+            or DbErrorType.Deadlock
+            or DbErrorType.ConnectionFailure
+            or DbErrorType.ResourceLimit;
+
     /// <summary>Returns an unknown error shape for the given exception.</summary>
     public static DbError Unknown(Exception exception)
     {

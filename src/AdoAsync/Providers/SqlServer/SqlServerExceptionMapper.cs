@@ -25,7 +25,7 @@ public static class SqlServerExceptionMapper
 
         if (sqlEx.Number == 0 && sqlEx.Message.Contains("transport-level error", StringComparison.OrdinalIgnoreCase))
         {
-            return Build(sqlEx, new Classification(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.connection_failure"));
+            return Build(sqlEx, new Classification(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, "errors.connection_failure"));
         }
 
         return DbErrorMapper.Map(sqlEx);
@@ -40,28 +40,28 @@ public static class SqlServerExceptionMapper
             classification.Code,
             classification.MessageKey,
             new[] { exception.Number.ToString(), exception.Message },
-            classification.IsTransient,
+            classification.IsTransientOverride ?? DbErrorMapper.IsTransientByType(classification.Type),
             $"SqlException#{exception.Number}");
     }
 
-    private readonly record struct Classification(DbErrorType Type, DbErrorCode Code, bool IsTransient, string MessageKey);
+    private readonly record struct Classification(DbErrorType Type, DbErrorCode Code, string MessageKey, bool? IsTransientOverride = null);
 
     // Data-first list of retryable/typed SQL Server errors.
     private static readonly IReadOnlyDictionary<int, Classification> RulesByNumber = new Dictionary<int, Classification>
     {
         // Login/connection issues
-        [4060] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.authentication_failed"),
-        [18456] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, true, "errors.authentication_failed"),
+        [4060] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, "errors.authentication_failed"),
+        [18456] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, "errors.authentication_failed"),
 
         // Deadlock
-        [1205] = new(DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, true, "errors.deadlock"),
+        [1205] = new(DbErrorType.Deadlock, DbErrorCode.GenericDeadlock, "errors.deadlock"),
 
         // Resource throttling
-        [10928] = new(DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, true, "errors.resource_limit"),
-        [10929] = new(DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, true, "errors.resource_limit"),
+        [10928] = new(DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, "errors.resource_limit"),
+        [10929] = new(DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, "errors.resource_limit"),
 
         // Timeout
-        [-2] = new(DbErrorType.Timeout, DbErrorCode.GenericTimeout, true, "errors.timeout")
+        [-2] = new(DbErrorType.Timeout, DbErrorCode.GenericTimeout, "errors.timeout")
     };
     #endregion
 }
