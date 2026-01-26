@@ -17,14 +17,98 @@ Streaming is **not supported** for:
 
 ---
 
-## 1.1) Provider-Specific `List<Customer>` Examples
+## 1.1) Unified `List<Customer>` Example (All Providers)
 
-Goal: get a `List<Customer>` with the correct API per provider.
+Goal: keep the example shape as identical as possible. Only the command differs by provider (streaming for SQL Server/PostgreSQL; buffered for Oracle).
 
-- SQL Server / PostgreSQL: stream rows (`IAsyncEnumerable<Customer>`) then materialize via `ToListAsync(...)`.
-- Oracle: streaming is not supported, so use buffered `IDbExecutor.QueryAsync<Customer>(...)`.
+```csharp
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
+using AdoAsync;
+using AdoAsync.Common;
+using AdoAsync.Abstractions;
+using AdoAsync.Execution;
+using AdoAsync.Extensions.Execution;
 
-### SQL Server (streaming → `List<Customer>`)
+public sealed record Customer(int Id, string Name);
+
+public static class CustomerQueries
+{
+    public static async Task<List<Customer>> GetCustomersAsync(DbOptions options, int minId, CancellationToken cancellationToken = default)
+    {
+        await using var executor = DbExecutor.Create(options);
+
+        return options.DatabaseType switch
+        {
+            DatabaseType.Oracle => await GetOracleBufferedAsync(executor, minId, cancellationToken),
+            _ => await GetStreamingAsync(executor, options.DatabaseType, minId, cancellationToken)
+        };
+    }
+
+    private static async Task<List<Customer>> GetStreamingAsync(
+        IDbExecutor executor,
+        DatabaseType databaseType,
+        int minId,
+        CancellationToken cancellationToken)
+    {
+        // SQL Server + PostgreSQL streaming. Alias columns so mapping is identical.
+        // (PostgreSQL also commonly uses "min_id" without a prefix, but "@minId" works.)
+        var commandText = databaseType == DatabaseType.SqlServer
+            ? "select Id = Id, Name = Name from dbo.Customers where Id >= @minId"
+            : "select id as Id, name as Name from public.customers where id >= @minId";
+
+        return await executor
+            .QueryAsync(
+                new CommandDefinition
+                {
+                    CommandText = commandText,
+                    CommandType = CommandType.Text,
+                    Parameters = new[]
+                    {
+                        new DbParameter { Name = "@minId", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId }
+                    }
+                },
+                map: (IDataRecord record) => new Customer(
+                    Id: record.Get<int>("Id") ?? 0,
+                    Name: record.Get<string>("Name") ?? string.Empty),
+                cancellationToken: cancellationToken)
+            .ToListAsync(cancellationToken);
+    }
+
+    private static async Task<List<Customer>> GetOracleBufferedAsync(
+        IDbExecutor executor,
+        int minId,
+        CancellationToken cancellationToken)
+    {
+        // Oracle does not support streaming in AdoAsync; use buffered QueryAsync<T> (DataTable -> List<T>).
+        (List<Customer> rows, _) = await executor.QueryAsync(
+            new CommandDefinition
+            {
+                CommandText = "select ID as Id, NAME as Name from CUSTOMERS where ID >= :minId",
+                CommandType = CommandType.Text,
+                Parameters = new[]
+                {
+                    new DbParameter { Name = ":minId", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId }
+                }
+            },
+            map: row => new Customer(
+                Id: row.Field<int>("Id"),
+                Name: row.Field<string>("Name") ?? string.Empty),
+            cancellationToken: cancellationToken);
+
+        return rows;
+    }
+}
+```
+
+## 1.2) `List<Customer>` Example (Base + Only Differences Per Provider)
+
+Use this when you want one “common” snippet and then only list the parts that change per provider.
+
+### 1.2.1 Common code (same for all)
 
 ```csharp
 using System.Collections.Generic;
@@ -32,196 +116,161 @@ using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using AdoAsync;
+using AdoAsync.Common;
+using AdoAsync.Abstractions;
 using AdoAsync.Execution;
 using AdoAsync.Extensions.Execution;
 
 public sealed record Customer(int Id, string Name);
 
-static async Task<List<Customer>> GetCustomersSqlServerAsync(string connectionString, int minId, CancellationToken cancellationToken)
+public static class CustomerRepository
 {
-    await using var executor = DbExecutor.Create(new DbOptions
+    public static async Task<List<Customer>> GetCustomersAsync(DbOptions options, int minId, CancellationToken cancellationToken = default)
     {
-        DatabaseType = DatabaseType.SqlServer,
-        ConnectionString = connectionString,
-        CommandTimeoutSeconds = 30
-    });
+        await using var executor = DbExecutor.Create(options);
 
-    return await DbExecutorQueryExtensions
-        .QueryAsync<Customer>(
-            executor,
+        if (options.DatabaseType == DatabaseType.Oracle)
+        {
+            return await QueryOracleBufferedAsync(executor, minId, cancellationToken);
+        }
+
+        return await QueryStreamingAsync(executor, options.DatabaseType, minId, cancellationToken);
+    }
+
+    private static async Task<List<Customer>> QueryStreamingAsync(
+        IDbExecutor executor,
+        DatabaseType databaseType,
+        int minId,
+        CancellationToken cancellationToken)
+    {
+        return await executor
+            .QueryAsync(
+                new CommandDefinition
+                {
+                    CommandText = GetCommandText(databaseType),
+                    CommandType = CommandType.Text,
+                    Parameters = new[] { GetMinIdParameter(databaseType, minId) }
+                },
+                map: (IDataRecord record) => new Customer(
+                    Id: record.Get<int>("Id") ?? 0,
+                    Name: record.Get<string>("Name") ?? string.Empty),
+                cancellationToken: cancellationToken)
+            .ToListAsync(cancellationToken);
+    }
+
+    private static async Task<List<Customer>> QueryOracleBufferedAsync(
+        IDbExecutor executor,
+        int minId,
+        CancellationToken cancellationToken)
+    {
+        (List<Customer> rows, _) = await executor.QueryAsync(
             new CommandDefinition
             {
-                CommandText = "select Id, Name from dbo.Customers where Id >= @minId",
+                CommandText = GetCommandText(DatabaseType.Oracle),
                 CommandType = CommandType.Text,
-                Parameters = new[]
-                {
-                    new DbParameter { Name = "@minId", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId }
-                }
+                Parameters = new[] { GetMinIdParameter(DatabaseType.Oracle, minId) }
             },
-            map: record => new Customer(
-                Id: record.GetInt32(record.GetOrdinal("Id")),
-                Name: record.GetString(record.GetOrdinal("Name"))),
-            cancellationToken: cancellationToken)
-        .ToListAsync(cancellationToken);
+            map: row => new Customer(
+                Id: row.Field<int>("Id"),
+                Name: row.Field<string>("Name") ?? string.Empty),
+            cancellationToken: cancellationToken);
+
+        return rows;
+    }
+
+    // provider-specific parts below
+    private static string GetCommandText(DatabaseType databaseType) => throw new NotImplementedException();
+    private static DbParameter GetMinIdParameter(DatabaseType databaseType, int minId) => throw new NotImplementedException();
 }
 ```
 
-SQL Server stored procedure version (still streaming):
+### 1.2.2 Provider-specific parts (only the differences)
+
+SQL Server:
 
 ```csharp
-// Stored procedure: dbo.GetCustomers(@minId) -> resultset (Id, Name)
-return await DbExecutorQueryExtensions
-    .QueryAsync<Customer>(
-        executor,
-        new CommandDefinition
-        {
-            CommandText = "dbo.GetCustomers",
-            CommandType = CommandType.StoredProcedure,
-            Parameters = new[]
-            {
-                new DbParameter { Name = "@minId", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId }
-            }
-        },
-        map: record => new Customer(
-            Id: record.GetInt32(record.GetOrdinal("Id")),
-            Name: record.GetString(record.GetOrdinal("Name"))),
-        cancellationToken: cancellationToken)
-    .ToListAsync(cancellationToken);
+private static string GetCommandText(DatabaseType databaseType) =>
+    "select Id = Id, Name = Name from dbo.Customers where Id >= @minId";
+
+private static DbParameter GetMinIdParameter(DatabaseType databaseType, int minId) =>
+    new() { Name = "@minId", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId };
 ```
 
-### PostgreSQL (streaming → `List<Customer>`)
+PostgreSQL:
 
 ```csharp
-using System.Collections.Generic;
-using System.Data;
-using System.Threading;
-using System.Threading.Tasks;
-using AdoAsync;
-using AdoAsync.Execution;
-using AdoAsync.Extensions.Execution;
+private static string GetCommandText(DatabaseType databaseType) =>
+    "select id as Id, name as Name from public.customers where id >= @minId";
 
-public sealed record Customer(int Id, string Name);
-
-static async Task<List<Customer>> GetCustomersPostgreSqlAsync(string connectionString, int minId, CancellationToken cancellationToken)
-{
-    await using var executor = DbExecutor.Create(new DbOptions
-    {
-        DatabaseType = DatabaseType.PostgreSql,
-        ConnectionString = connectionString,
-        CommandTimeoutSeconds = 30
-    });
-
-    return await DbExecutorQueryExtensions
-        .QueryAsync<Customer>(
-            executor,
-            new CommandDefinition
-            {
-                CommandText = "select id, name from public.customers where id >= @min_id",
-                CommandType = CommandType.Text,
-                Parameters = new[]
-                {
-                    new DbParameter { Name = "@min_id", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId }
-                }
-            },
-            map: record => new Customer(
-                Id: record.GetInt32(record.GetOrdinal("id")),
-                Name: record.GetString(record.GetOrdinal("name"))),
-            cancellationToken: cancellationToken)
-        .ToListAsync(cancellationToken);
-}
+private static DbParameter GetMinIdParameter(DatabaseType databaseType, int minId) =>
+    new() { Name = "@minId", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId };
 ```
 
-PostgreSQL stored procedure version (streaming only if it returns a rowset directly):
+Oracle:
 
 ```csharp
-// Stored procedure: public.get_customers(min_id) -> rowset (id, name)
-return await DbExecutorQueryExtensions
-    .QueryAsync<Customer>(
-        executor,
-        new CommandDefinition
-        {
-            CommandText = "public.get_customers",
-            CommandType = CommandType.StoredProcedure,
-            Parameters = new[]
-            {
-                new DbParameter { Name = "min_id", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId }
-            }
-        },
-        map: record => new Customer(
-            Id: record.GetInt32(record.GetOrdinal("id")),
-            Name: record.GetString(record.GetOrdinal("name"))),
-        cancellationToken: cancellationToken)
-    .ToListAsync(cancellationToken);
+private static string GetCommandText(DatabaseType databaseType) =>
+    "select ID as Id, NAME as Name from CUSTOMERS where ID >= :minId";
+
+private static DbParameter GetMinIdParameter(DatabaseType databaseType, int minId) =>
+    new() { Name = ":minId", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId };
 ```
 
-If your PostgreSQL procedure returns results via `refcursor`, use the buffered refcursor pattern (`QueryTablesAsync` / `ExecuteDataSetAsync`) instead of streaming.
+## 1.3) `IAsyncEnumerable<Customer>` Example (Streaming)
 
-### Oracle (buffered → `List<Customer>`)
+This returns an `IAsyncEnumerable<Customer>` for SQL Server/PostgreSQL. Oracle streaming is not supported, so this method throws for Oracle.
 
 ```csharp
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Threading;
-using System.Threading.Tasks;
 using AdoAsync;
-using AdoAsync.Execution;
+using AdoAsync.Common;
+using AdoAsync.Abstractions;
 
 public sealed record Customer(int Id, string Name);
 
-static async Task<List<Customer>> GetCustomersOracleAsync(string connectionString, int minId, CancellationToken cancellationToken)
+public static class CustomerStreams
 {
-    await using var executor = DbExecutor.Create(new DbOptions
+    public static IAsyncEnumerable<Customer> StreamCustomers(
+        IDbExecutor executor,
+        DatabaseType databaseType,
+        int minId,
+        CancellationToken cancellationToken = default)
     {
-        DatabaseType = DatabaseType.Oracle,
-        ConnectionString = connectionString,
-        CommandTimeoutSeconds = 30
-    });
-
-    (List<Customer> rows, _) = await executor.QueryAsync<Customer>(
-        new CommandDefinition
+        if (databaseType == DatabaseType.Oracle)
         {
-            CommandText = "select ID, NAME from CUSTOMERS where ID >= :min_id",
-            CommandType = CommandType.Text,
-            Parameters = new[]
+            throw new NotSupportedException("Oracle streaming is not supported; use buffered QueryAsync/QueryTableAsync instead.");
+        }
+
+        var commandText = databaseType == DatabaseType.SqlServer
+            ? "select Id = Id, Name = Name from dbo.Customers where Id >= @minId"
+            : "select id as Id, name as Name from public.customers where id >= @minId";
+
+        return executor.QueryAsync(
+            new CommandDefinition
             {
-                new DbParameter { Name = ":min_id", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId }
-            }
-        },
-        map: row => new Customer(
-            Id: Convert.ToInt32(row["ID"]),
-            Name: Convert.ToString(row["NAME"]) ?? string.Empty),
-        cancellationToken: cancellationToken);
-
-    return rows;
-}
-```
-
-Oracle stored procedure version (buffered refcursor):
-
-```csharp
-// Stored procedure: PKG_CUSTOMER.GET_CUSTOMERS(p_min_id IN number, p_customers OUT sys_refcursor)
-var tables = await executor.QueryTablesAsync(new CommandDefinition
-{
-    CommandText = "PKG_CUSTOMER.GET_CUSTOMERS",
-    CommandType = CommandType.StoredProcedure,
-    Parameters = new[]
-    {
-        new DbParameter { Name = "p_min_id", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId },
-        new DbParameter { Name = "p_customers", DataType = DbDataType.RefCursor, Direction = ParameterDirection.Output }
+                CommandText = commandText,
+                CommandType = CommandType.Text,
+                Parameters = new[]
+                {
+                    new DbParameter { Name = "@minId", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId }
+                }
+            },
+            map: (IDataRecord record) => new Customer(
+                Id: record.Get<int>("Id") ?? 0,
+                Name: record.Get<string>("Name") ?? string.Empty),
+            cancellationToken: cancellationToken);
     }
-}, cancellationToken);
+}
 
-var customersTable = tables.Tables[0];
-var customers = new List<Customer>(customersTable.Rows.Count);
-foreach (DataRow row in customersTable.Rows)
+// usage
+await foreach (var customer in CustomerStreams.StreamCustomers(executor, options.DatabaseType, minId: 100, cancellationToken))
 {
-    customers.Add(new Customer(
-        Id: Convert.ToInt32(row["ID"]),
-        Name: Convert.ToString(row["NAME"]) ?? string.Empty));
+    // process customer
 }
 ```
-
 
 ## 2) Streaming APIs (What To Use)
 
@@ -272,9 +321,9 @@ public static class Demo
 
         await foreach (var customer in executor.QueryAsync(
             command,
-            record => new Customer(
-                record.Get<int>(0) ?? 0,
-                record.Get<string>(1) ?? string.Empty),
+            (IDataRecord record) => new Customer(
+                record.Get<int>("Id") ?? 0,
+                record.Get<string>("Name") ?? string.Empty),
             cancellationToken))
         {
             Console.WriteLine($"{customer.Id} - {customer.Name}");
@@ -283,36 +332,82 @@ public static class Demo
 }
 ```
 
-Materialize to `List<Customer>` (SQL Server/PostgreSQL only):
+Same query, but return `List<Customer>` (SQL Server/PostgreSQL only):
 
 ```csharp
 using System.Collections.Generic;
 using System.Data;
 using System.Threading;
+using System.Threading.Tasks;
 using AdoAsync;
+using AdoAsync.Common;
 using AdoAsync.Execution;
 using AdoAsync.Extensions.Execution;
 
 public sealed record Customer(int Id, string Name);
 
-// IAsyncEnumerable<Customer> -> List<Customer>
-List<Customer> customers = await DbExecutorQueryExtensions
-    .QueryAsync<Customer>(
+static async Task<List<Customer>> GetCustomersAsync(AdoAsync.Abstractions.IDbExecutor executor, CancellationToken cancellationToken)
+{
+    var command = new CommandDefinition
+    {
+        CommandText = "select Id, Name from dbo.Customers",
+        CommandType = CommandType.Text
+    };
+
+    // Style A: extension method call site (recommended)
+    return await executor
+        .QueryAsync(
+            command,
+            (IDataRecord record) => new Customer(
+                record.Get<int>("Id") ?? 0,
+                record.Get<string>("Name") ?? string.Empty),
+            cancellationToken)
+        .ToListAsync(cancellationToken);
+}
+```
+
+Equivalent, but calling the extension method explicitly (same behavior, just more verbose):
+
+```csharp
+// Style B: explicit static call (exact same method as Style A)
+return await AdoAsync.Execution.DbExecutorQueryExtensions
+    .QueryAsync(
         executor,
+        command,
+        (IDataRecord record) => new Customer(
+            record.Get<int>("Id") ?? 0,
+            record.Get<string>("Name") ?? string.Empty),
+        cancellationToken)
+    .ToListAsync(cancellationToken);
+```
+
+Oracle equivalent (buffered; streaming is not supported):
+
+```csharp
+using System.Collections.Generic;
+using System.Data;
+using System.Threading;
+using System.Threading.Tasks;
+using AdoAsync;
+using AdoAsync.Execution;
+
+public sealed record Customer(int Id, string Name);
+
+static async Task<List<Customer>> GetCustomersOracleAsync(AdoAsync.Abstractions.IDbExecutor executor, CancellationToken cancellationToken)
+{
+    (List<Customer> rows, _) = await executor.QueryAsync(
         new CommandDefinition
         {
-            CommandText = "select Id, Name from dbo.Customers where Id >= @minId",
-            CommandType = CommandType.Text,
-            Parameters = new[]
-            {
-                new DbParameter { Name = "@minId", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = 100 }
-            }
+            CommandText = "select ID as Id, NAME as Name from CUSTOMERS",
+            CommandType = CommandType.Text
         },
-        map: record => new Customer(
-            Id: record.GetInt32(record.GetOrdinal("Id")),
-            Name: record.GetString(record.GetOrdinal("Name"))),
-        cancellationToken: cancellationToken)
-    .ToListAsync(cancellationToken);
+        map: row => new Customer(
+            Id: row.Field<int>("Id"),
+            Name: row.Field<string>("Name") ?? string.Empty),
+        cancellationToken: cancellationToken);
+
+    return rows;
+}
 ```
 
 ### B) Lowest-level streaming: `ExecuteReaderAsync`
@@ -396,16 +491,16 @@ public sealed record Customer(int Id, string Name);
 (List<Customer> Rows, _) result = await executor.QueryAsync<Customer>(
     new CommandDefinition
     {
-        CommandText = "select ID, NAME from CUSTOMERS where ID >= :min_id",
+        CommandText = "select ID as Id, NAME as Name from CUSTOMERS where ID >= :minId",
         CommandType = CommandType.Text,
         Parameters = new[]
         {
-            new DbParameter { Name = ":min_id", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = 100 }
+            new DbParameter { Name = ":minId", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = 100 }
         }
     },
     map: row => new Customer(
-        Id: Convert.ToInt32(row["ID"]),
-        Name: Convert.ToString(row["NAME"]) ?? string.Empty),
+        Id: row.Field<int>("Id"),
+        Name: row.Field<string>("Name") ?? string.Empty),
     cancellationToken: cancellationToken);
 
 List<Customer> customers = result.Rows;
