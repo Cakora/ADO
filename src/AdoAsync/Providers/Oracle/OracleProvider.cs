@@ -45,9 +45,13 @@ public sealed class OracleProvider : IDbProvider
         Validate.Required(command, nameof(command));
         Validate.Required(parameters, nameof(parameters));
 
+        var oracleCommand = command as OracleCommand;
+        int? arrayBindCount = null;
+
         // Oracle cursor outputs must be defined provider-side; map cursor parameters explicitly when needed.
         foreach (var param in parameters)
         {
+            var isArrayBinding = param.IsArrayBinding;
             var oraParam = new OracleParameter
             {
                 ParameterName = param.Name,
@@ -55,7 +59,51 @@ public sealed class OracleProvider : IDbProvider
                 Direction = param.Direction
             };
 
-            if (param.Size.HasValue)
+            if (isArrayBinding)
+            {
+                if (oracleCommand is null)
+                {
+                    throw new DatabaseException(ErrorCategory.Configuration, "Oracle array binding requires an OracleCommand.");
+                }
+
+                if (param.Value is null)
+                {
+                    throw new DatabaseException(ErrorCategory.Validation, "Array binding parameters must specify a Value.");
+                }
+
+                if (param.Value is not Array valueArray)
+                {
+                    throw new DatabaseException(ErrorCategory.Validation, "Array binding parameters must use an array Value.");
+                }
+
+                if (valueArray.Length == 0)
+                {
+                    throw new DatabaseException(ErrorCategory.Validation, "Array binding parameters must not be empty.");
+                }
+
+                arrayBindCount ??= valueArray.Length;
+                if (valueArray.Length != arrayBindCount.Value)
+                {
+                    throw new DatabaseException(ErrorCategory.Validation, "All array binding parameters must have the same length.");
+                }
+
+                oraParam.CollectionType = OracleCollectionType.PLSQLAssociativeArray;
+                // Oracle expects Size to be the element count for associative array binding.
+                oraParam.Size = valueArray.Length;
+
+                // For string arrays, ArrayBindSize must be set (per element) to avoid truncation/ODP.NET errors.
+                if (param.Size.HasValue && param.DataType is DbDataType.String
+                        or DbDataType.AnsiString
+                        or DbDataType.StringFixed
+                        or DbDataType.AnsiStringFixed)
+                {
+                    var elementSizes = new int[valueArray.Length];
+                    Array.Fill(elementSizes, param.Size.Value);
+                    oraParam.ArrayBindSize = elementSizes;
+                }
+            }
+
+            if (!isArrayBinding && param.Size.HasValue)
             {
                 oraParam.Size = param.Size.Value;
             }
@@ -72,6 +120,11 @@ public sealed class OracleProvider : IDbProvider
 
             oraParam.OracleDbType = OracleTypeMapper.Map(param.DataType);
             command.Parameters.Add(oraParam);
+        }
+
+        if (oracleCommand is not null && arrayBindCount.HasValue)
+        {
+            oracleCommand.ArrayBindCount = arrayBindCount.Value;
         }
     }
 

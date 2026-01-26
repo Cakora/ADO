@@ -18,7 +18,7 @@ public class DbCallerException : Exception
     public DbErrorType ErrorType => Error.Type;
 
     /// <summary>Convenience accessor for <see cref="DbError.Code"/>.</summary>
-    public DbErrorCode ErrorCode => Error.Code;
+    public string ErrorCode => Error.Code;
 
     /// <summary>Indicates whether the error is marked transient by the provider mapper.</summary>
     public bool IsTransient => Error.IsTransient;

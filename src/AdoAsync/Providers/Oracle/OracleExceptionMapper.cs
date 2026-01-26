@@ -25,7 +25,7 @@ public static class OracleExceptionMapper
 
         if (oraEx.Number == 0 && oraEx.Message.Contains("broken pipe", StringComparison.OrdinalIgnoreCase))
         {
-            return Build(oraEx, new Classification(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, "errors.connection_failure"));
+            return Build(oraEx, new Classification(DbErrorType.ConnectionFailure, DbErrorCodes.ConnectionLost, "errors.connection_failure"));
         }
 
         return DbErrorMapper.Map(oraEx);
@@ -44,20 +44,20 @@ public static class OracleExceptionMapper
             $"OracleException#{exception.Number}");
     }
 
-    private readonly record struct Classification(DbErrorType Type, DbErrorCode Code, string MessageKey, bool? IsTransientOverride = null);
+    private readonly record struct Classification(DbErrorType Type, string Code, string MessageKey, bool? IsTransientOverride = null);
 
     // Data-first list of retryable/typed Oracle errors (ORA-xxxxx).
     private static readonly IReadOnlyDictionary<int, Classification> RulesByNumber = new Dictionary<int, Classification>
     {
         // ORA-01017: invalid username/password.
-        [1017] = new(DbErrorType.ConnectionFailure, DbErrorCode.AuthenticationFailed, "errors.authentication_failed", IsTransientOverride: false),
-        [1013] = new(DbErrorType.Timeout, DbErrorCode.GenericTimeout, "errors.timeout"),
-        [12170] = new(DbErrorType.Timeout, DbErrorCode.GenericTimeout, "errors.timeout"),
-        [12514] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, "errors.connection_failure"),
-        [12541] = new(DbErrorType.ConnectionFailure, DbErrorCode.ConnectionLost, "errors.connection_failure"),
+        [1017] = new(DbErrorType.ConnectionFailure, DbErrorCodes.AuthenticationFailed, "errors.authentication_failed", IsTransientOverride: false),
+        [1013] = new(DbErrorType.Timeout, DbErrorCodes.GenericTimeout, "errors.timeout"),
+        [12170] = new(DbErrorType.Timeout, DbErrorCodes.GenericTimeout, "errors.timeout"),
+        [12514] = new(DbErrorType.ConnectionFailure, DbErrorCodes.ConnectionLost, "errors.connection_failure"),
+        [12541] = new(DbErrorType.ConnectionFailure, DbErrorCodes.ConnectionLost, "errors.connection_failure"),
 
         // ORA-01000: maximum open cursors exceeded (not typically resolved by immediate retry).
-        [1000] = new(DbErrorType.ResourceLimit, DbErrorCode.ResourceLimitExceeded, "errors.resource_limit", IsTransientOverride: false)
+        [1000] = new(DbErrorType.ResourceLimit, DbErrorCodes.ResourceLimitExceeded, "errors.resource_limit", IsTransientOverride: false)
     };
     #endregion
 }

@@ -75,6 +75,14 @@ public enum DbDataType
     Json,
     /// <summary>XML payload.</summary>
     Xml,
+    /// <summary>
+    /// SQL Server table-valued parameter (TVP) / structured parameter.
+    /// </summary>
+    /// <remarks>
+    /// Provider-specific. Only supported by SQL Server.
+    /// Use <see cref="DbParameter.StructuredTypeName"/> to specify the TVP type name.
+    /// </remarks>
+    Structured,
     /// <summary>REF CURSOR (Oracle/PostgreSQL).</summary>
     // Only used for provider-specific multi-result procedures.
     RefCursor

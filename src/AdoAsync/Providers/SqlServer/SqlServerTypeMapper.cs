@@ -51,7 +51,8 @@ public static class SqlServerTypeMapper
             [DbDataType.Interval] = SqlDbType.Time,
 
             [DbDataType.Json] = SqlDbType.NVarChar,
-            [DbDataType.Xml] = SqlDbType.Xml
+            [DbDataType.Xml] = SqlDbType.Xml,
+            [DbDataType.Structured] = SqlDbType.Structured
         }.ToFrozenDictionary();
 
     #region Public API

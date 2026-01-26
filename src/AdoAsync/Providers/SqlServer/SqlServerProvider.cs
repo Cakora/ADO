@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
@@ -52,6 +53,27 @@ public sealed class SqlServerProvider : IDbProvider
                 Value = param.Value ?? DBNull.Value,
                 Direction = param.Direction
             };
+
+            if (param.DataType == DbDataType.Structured)
+            {
+                if (param.Value is null)
+                {
+                    throw new DatabaseException(ErrorCategory.Validation, "Structured (TVP) parameters must specify a Value.");
+                }
+
+                if (string.IsNullOrWhiteSpace(param.StructuredTypeName))
+                {
+                    throw new DatabaseException(ErrorCategory.Validation, "Structured (TVP) parameters must specify StructuredTypeName.");
+                }
+
+                // TVPs are input-only in SQL Server.
+                if (param.Direction != ParameterDirection.Input)
+                {
+                    throw new DatabaseException(ErrorCategory.Validation, "Structured (TVP) parameters must be Input.");
+                }
+
+                sqlParam.TypeName = param.StructuredTypeName;
+            }
 
             if (param.Size.HasValue)
             {

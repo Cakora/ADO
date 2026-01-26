@@ -88,7 +88,7 @@ public static class ValidationRunner
         return new DbError
         {
             Type = DbErrorType.ValidationError,
-            Code = DbErrorCode.ValidationFailed,
+            Code = DbErrorCodes.ValidationFailed,
             MessageKey = "errors.validation",
             MessageParameters = messages,
             IsTransient = false

@@ -12,7 +12,7 @@ public sealed record DbError
     public required DbErrorType Type { get; init; }
 
     /// <summary>Stable error code.</summary>
-    public required DbErrorCode Code { get; init; }
+    public required string Code { get; init; }
 
     /// <summary>Stable key for localization lookup.</summary>
     // Keep message keys stable so UI can translate without parsing errors.
@@ -56,27 +56,33 @@ public enum DbErrorType
     #endregion
 }
 
-/// <summary>Stable error codes.</summary>
-public enum DbErrorCode
+/// <summary>Stable error codes as string constants.</summary>
+public static class DbErrorCodes
 {
-    #region Values
-    /// <summary>Authentication/authorization failure (invalid credentials or login rejected).</summary>
-    AuthenticationFailed,
+    /// <summary>Authentication failed (invalid login / credentials).</summary>
+    public const string AuthenticationFailed = "authentication_failed";
+
     /// <summary>Operation was canceled (typically via CancellationToken).</summary>
-    Canceled,
-    /// <summary>Timeout occurred.</summary>
-    GenericTimeout,
-    /// <summary>Deadlock occurred.</summary>
-    GenericDeadlock,
-    /// <summary>Connection lost.</summary>
-    ConnectionLost,
-    /// <summary>Resource limit exceeded.</summary>
-    ResourceLimitExceeded,
-    /// <summary>Validation failed.</summary>
-    ValidationFailed,
-    /// <summary>Syntax error.</summary>
-    SyntaxError,
-    /// <summary>Unclassified error.</summary>
-    Unknown
-    #endregion
+    public const string Canceled = "canceled";
+
+    /// <summary>Generic timeout code (provider-agnostic).</summary>
+    public const string GenericTimeout = "timeout";
+
+    /// <summary>Generic deadlock code (provider-agnostic).</summary>
+    public const string GenericDeadlock = "deadlock";
+
+    /// <summary>Connection was lost or dropped during execution.</summary>
+    public const string ConnectionLost = "connection_lost";
+
+    /// <summary>Resource limit exceeded (e.g., quota, pool limit, memory/space pressure).</summary>
+    public const string ResourceLimitExceeded = "resource_limit_exceeded";
+
+    /// <summary>Validation failed (caller input / command definition).</summary>
+    public const string ValidationFailed = "validation_failed";
+
+    /// <summary>SQL or command syntax error.</summary>
+    public const string SyntaxError = "syntax_error";
+
+    /// <summary>Fallback for unmapped provider errors.</summary>
+    public const string Unknown = "unknown";
 }

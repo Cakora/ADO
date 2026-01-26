@@ -17,7 +17,7 @@ public static class DbErrorMapper
     /// </remarks>
     internal static DbError FromProvider(
         DbErrorType type,
-        DbErrorCode code,
+        string code,
         string messageKey,
         IReadOnlyList<string>? messageParameters,
         bool isTransient,
@@ -54,7 +54,7 @@ public static class DbErrorMapper
         return new DbError
         {
             Type = DbErrorType.Unknown,
-            Code = DbErrorCode.Unknown,
+            Code = DbErrorCodes.Unknown,
             MessageKey = "errors.unknown",
                 MessageParameters = new[] { exception.Message },
                 IsTransient = false,
@@ -87,7 +87,7 @@ public static class DbErrorMapper
             return new DbError
             {
                 Type = DbErrorType.Timeout,
-                Code = DbErrorCode.GenericTimeout,
+                Code = DbErrorCodes.GenericTimeout,
                 MessageKey = "errors.timeout",
                 MessageParameters = new[] { exception.Message },
                 IsTransient = isTransientOverride ?? true,
@@ -100,7 +100,7 @@ public static class DbErrorMapper
             return new DbError
             {
                 Type = DbErrorType.Canceled,
-                Code = DbErrorCode.Canceled,
+                Code = DbErrorCodes.Canceled,
                 MessageKey = "errors.canceled",
                 MessageParameters = new[] { exception.Message },
                 IsTransient = isTransientOverride ?? false,
@@ -119,7 +119,7 @@ public static class DbErrorMapper
         return new DbError
         {
             Type = DbErrorType.ValidationError,
-            Code = DbErrorCode.ValidationFailed,
+            Code = DbErrorCodes.ValidationFailed,
             MessageKey = "errors.validation",
             MessageParameters = parameters is null ? new[] { message } : new List<string>(parameters),
             IsTransient = false

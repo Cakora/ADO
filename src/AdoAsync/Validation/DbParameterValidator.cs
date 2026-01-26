@@ -66,6 +66,26 @@ public sealed class DbParameterValidator : AbstractValidator<DbParameter>
                        or System.Data.ParameterDirection.InputOutput)
             // RefCursor is a provider feature (Oracle/PostgreSQL) and only valid as an output.
             .WithMessage("RefCursor parameters must be Output or InputOutput.");
+
+        RuleFor(x => x)
+            .Must(p => p.DataType != DbDataType.Structured
+                       || (p.Direction == System.Data.ParameterDirection.Input
+                           && !string.IsNullOrWhiteSpace(p.StructuredTypeName)
+                           && p.Value is not null))
+            // TVP/structured parameters are SQL Server-specific and input-only.
+            .WithMessage("Structured parameters must be Input, specify StructuredTypeName, and provide a Value.");
+
+        RuleFor(x => x)
+            .Must(p => !p.IsArrayBinding || (p.Direction == System.Data.ParameterDirection.Input && p.Value is Array a && a.Length > 0))
+            // Keep array binding explicit and input-only (Oracle PLSQL associative arrays).
+            .WithMessage("Array binding parameters must be Input and provide a non-empty array Value.");
+
+        RuleFor(x => x)
+            .Must(p => !p.IsArrayBinding
+                       || !IsLengthConstrainedType(p.DataType)
+                       || p.Size.HasValue)
+            // Oracle string array binding requires an explicit per-element size.
+            .WithMessage("Array binding string parameters must specify Size.");
     }
     #endregion
 

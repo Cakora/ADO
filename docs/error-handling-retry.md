@@ -9,7 +9,7 @@ We want **clean code** with **no “1000-line error layer”** inside the librar
 The design target is:
 
 - Library code stays small and consistent.
-- API apps can handle errors in ~10 lines using `DbErrorType`/`DbErrorCode`.
+- API apps can handle errors in ~10 lines using `DbErrorType` + `DbError.Code` (string).
 - Localization stays outside the library (middleware can use resx when needed).
 
 ## Goals (Non-Negotiable)
@@ -61,19 +61,19 @@ catch (DbCallerException ex)
     // Special-case auth failures by stable code (more precise than Type).
     var status = ex.Error.Code switch
     {
-        DbErrorCode.AuthenticationFailed => StatusCodes.Status401Unauthorized,
+        DbErrorCodes.AuthenticationFailed => StatusCodes.Status401Unauthorized,
         _ => StatusByType.GetValueOrDefault(ex.Error.Type, 500)
     };
 
     var message = Localize(ex.Error.MessageKey, ex.Error.MessageParameters); // resx later
-    return Problem(status, ex.Error.Code.ToString(), message);
+    return Problem(status, ex.Error.Code, message);
 }
 ```
 
 This stays tiny because the library already provides the meaning:
 
 - `DbErrorType` → which kind of failure
-- `DbErrorCode` → stable code for client logic
+- `DbError.Code` → stable code for client logic (use `DbErrorCodes.*` constants)
 - `MessageKey` → stable localization key (optional now, useful later)
 - `IsTransient` → retry hint (buffered only, no transaction)
 

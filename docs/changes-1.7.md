@@ -38,9 +38,9 @@ Breaking note (localization only):
 ## Changed (Retry guidance)
 
 - SQL Server authentication/login failures (`SqlException.Number` 4060/18456) are now marked non-transient (no retry).
-- Added `DbErrorCode.AuthenticationFailed` and mapped provider authentication failures (SQL Server 4060/18456, PostgreSQL `28P01`, Oracle `ORA-01017`) as non-transient.
-  - Middleware can map `DbErrorCode.AuthenticationFailed` to HTTP 401 without parsing provider messages.
-- Added `DbErrorCode.Canceled` (maps `OperationCanceledException`/`TaskCanceledException` to a stable code for middleware handling).
+- Added `DbErrorCodes.AuthenticationFailed` and mapped provider authentication failures (SQL Server 4060/18456, PostgreSQL `28P01`, Oracle `ORA-01017`) as non-transient.
+  - Middleware can map `DbErrorCodes.AuthenticationFailed` to HTTP 401 without parsing provider messages.
+- Added `DbErrorCodes.Canceled` (maps `OperationCanceledException`/`TaskCanceledException` to a stable code for middleware handling).
 - `OperationCanceledException`/`TaskCanceledException` are now mapped to `DbErrorType.Canceled` (instead of `Timeout`) for cleaner middleware/status handling.
 
 ## Changed (Exceptions)
@@ -53,4 +53,4 @@ Breaking note (localization only):
 
 ## Documentation
 
-- Updated `src/AdoAsync/README.md` error-handling example to show `DbErrorCode.AuthenticationFailed` and cancel handling.
+- Updated `src/AdoAsync/README.md` error-handling example to show `DbErrorCodes.AuthenticationFailed` and cancel handling.

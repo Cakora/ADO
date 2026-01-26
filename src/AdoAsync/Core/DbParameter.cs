@@ -32,5 +32,22 @@ public sealed record DbParameter
 
     /// <summary>Optional scale for decimals.</summary>
     public byte? Scale { get; init; }
+
+    /// <summary>
+    /// Provider-specific structured type name (SQL Server TVP).
+    /// </summary>
+    /// <remarks>
+    /// Required when <see cref="DataType"/> is <see cref="DbDataType.Structured"/>.
+    /// Example: <c>dbo.MyRowType</c>.
+    /// </remarks>
+    public string? StructuredTypeName { get; init; }
+
+    /// <summary>
+    /// Indicates that this parameter uses provider array binding (Oracle PLSQL associative arrays).
+    /// </summary>
+    /// <remarks>
+    /// When set, <see cref="Value"/> must be an array and all array-binding parameters in the same command must have the same length.
+    /// </remarks>
+    public bool IsArrayBinding { get; init; }
     #endregion
 }

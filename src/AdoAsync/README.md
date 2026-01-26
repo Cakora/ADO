@@ -30,14 +30,14 @@ try
 catch (DbCallerException ex)
 {
     // Use structured info instead of parsing messages.
-    if (ex.ErrorCode == DbErrorCode.AuthenticationFailed)
-    {
-        // map to HTTP 401 (API) or show login error (UI)
-    }
-    else if (ex.ErrorType == DbErrorType.Canceled || ex.ErrorCode == DbErrorCode.Canceled)
-    {
-        // request canceled (often map to 499 in APIs)
-    }
+	    if (ex.ErrorCode == DbErrorCodes.AuthenticationFailed)
+	    {
+	        // map to HTTP 401 (API) or show login error (UI)
+	    }
+	    else if (ex.ErrorType == DbErrorType.Canceled || ex.ErrorCode == DbErrorCodes.Canceled)
+	    {
+	        // request canceled (often map to 499 in APIs)
+	    }
     else
     {
         switch (ex.ErrorType)
