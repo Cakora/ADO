@@ -58,6 +58,8 @@ public sealed partial class DbExecutor
         await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
         var connection = _connection ?? throw new DatabaseException(ErrorCategory.State, "Connection was not initialized.");
         var dbCommand = _provider.CreateCommand(connection, definition);
+        // CommandDefinition override wins; otherwise fall back to the executor-level default.
+        dbCommand.CommandTimeout = definition.CommandTimeoutSeconds ?? _options.CommandTimeoutSeconds;
         if (_activeTransaction is not null)
         {
             dbCommand.Transaction = _activeTransaction;
