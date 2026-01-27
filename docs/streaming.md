@@ -435,6 +435,34 @@ while (await result.Reader.ReadAsync(cancellationToken))
 }
 ```
 
+Return `List<Customer>` using `ExecuteReaderAsync` (SQL Server/PostgreSQL only):
+
+```csharp
+using System.Collections.Generic;
+using System.Data;
+using AdoAsync.Common;
+using AdoAsync.Execution;
+
+public sealed record Customer(int Id, string Name);
+
+await using var result = await executor.ExecuteReaderAsync(new CommandDefinition
+{
+    CommandText = "select Id, Name from dbo.Customers",
+    CommandType = CommandType.Text
+}, cancellationToken);
+
+var customers = new List<Customer>();
+await using (result.Reader)
+{
+    while (await result.Reader.ReadAsync(cancellationToken))
+    {
+        customers.Add(new Customer(
+            Id: result.Reader.Get<int>("Id") ?? 0,
+            Name: result.Reader.Get<string>("Name") ?? string.Empty));
+    }
+}
+```
+
 ### C) Streaming + output parameters: `ExecuteReaderAsync`
 
 Method:
