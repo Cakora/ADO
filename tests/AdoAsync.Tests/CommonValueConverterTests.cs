@@ -47,6 +47,37 @@ public class CommonValueConverterTests
     }
 
     [Fact]
+    public void DataRecord_Get_ConvertsDateTimeOffsetFromString()
+    {
+        var text = "2024-01-02T03:04:05+00:00";
+        var table = new DataTable();
+        table.Columns.Add("CreatedAt", typeof(string));
+        table.Rows.Add(text);
+
+        using var reader = table.CreateDataReader();
+        reader.Read().Should().BeTrue();
+
+        var value = reader.Get<DateTimeOffset>(0);
+
+        value.Should().Be(DateTimeOffset.Parse(text, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind));
+    }
+
+    [Fact]
+    public void DataRecord_Get_ConvertsTimeSpanFromString()
+    {
+        var table = new DataTable();
+        table.Columns.Add("Duration", typeof(string));
+        table.Rows.Add("00:01:02");
+
+        using var reader = table.CreateDataReader();
+        reader.Read().Should().BeTrue();
+
+        var value = reader.Get<TimeSpan>(0);
+
+        value.Should().Be(TimeSpan.FromSeconds(62));
+    }
+
+    [Fact]
     public void DataRecord_Get_ConvertsEnumFromString()
     {
         var table = new DataTable();

@@ -5,6 +5,8 @@ namespace AdoAsync.Common;
 
 internal static class CommonValueConverter
 {
+    private static readonly CultureInfo InvariantCulture = CultureInfo.InvariantCulture;
+
     internal static object? ConvertValue(object? value, Type targetType)
     {
         if (targetType is null)
@@ -14,6 +16,17 @@ internal static class CommonValueConverter
 
         var nullableUnderlying = Nullable.GetUnderlyingType(targetType);
         var resolvedTargetType = nullableUnderlying ?? targetType;
+
+        // Fast path: return unchanged when already compatible.
+        if (value is not null && resolvedTargetType.IsInstanceOfType(value))
+        {
+            return value;
+        }
+
+        if (resolvedTargetType == typeof(object))
+        {
+            return value;
+        }
 
         if (value is null)
         {
@@ -38,7 +51,7 @@ internal static class CommonValueConverter
                 return new Guid(bytes);
             }
 
-            var text = Convert.ToString(value, CultureInfo.InvariantCulture);
+            var text = Convert.ToString(value, InvariantCulture);
             return string.IsNullOrWhiteSpace(text) ? Guid.Empty : Guid.Parse(text);
         }
 
@@ -51,7 +64,9 @@ internal static class CommonValueConverter
                 DateTime dateTime => new DateTimeOffset(dateTime.Kind == DateTimeKind.Unspecified
                     ? DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
                     : dateTime),
-                _ => Convert.ChangeType(value, resolvedTargetType, CultureInfo.InvariantCulture)
+                string text when DateTimeOffset.TryParse(text, InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed) => parsed,
+                string => throw new InvalidCastException($"Cannot convert '{value}' to '{resolvedTargetType}'."),
+                _ => throw new InvalidCastException($"Cannot convert '{value.GetType()}' to '{resolvedTargetType}'.")
             };
         }
 
@@ -60,7 +75,7 @@ internal static class CommonValueConverter
             return value switch
             {
                 DateTime dateTime => dateTime,
-                _ => Convert.ChangeType(value, resolvedTargetType, CultureInfo.InvariantCulture)
+                _ => Convert.ChangeType(value, resolvedTargetType, InvariantCulture)
             };
         }
 
@@ -71,7 +86,9 @@ internal static class CommonValueConverter
             {
                 TimeSpan span => span,
                 DateTime dateValue => dateValue.TimeOfDay,
-                _ => Convert.ChangeType(value, resolvedTargetType, CultureInfo.InvariantCulture)
+                string text when TimeSpan.TryParse(text, InvariantCulture, out var parsed) => parsed,
+                string => throw new InvalidCastException($"Cannot convert '{value}' to '{resolvedTargetType}'."),
+                _ => throw new InvalidCastException($"Cannot convert '{value.GetType()}' to '{resolvedTargetType}'.")
             };
         }
 
@@ -86,10 +103,10 @@ internal static class CommonValueConverter
             var enumUnderlying = Enum.GetUnderlyingType(resolvedTargetType);
             var normalizedValue = value.GetType() == enumUnderlying
                 ? value
-                : Convert.ChangeType(value, enumUnderlying, CultureInfo.InvariantCulture);
+                : Convert.ChangeType(value, enumUnderlying, InvariantCulture);
             return Enum.ToObject(resolvedTargetType, normalizedValue);
         }
 
-        return Convert.ChangeType(value, resolvedTargetType, CultureInfo.InvariantCulture);
+        return Convert.ChangeType(value, resolvedTargetType, InvariantCulture);
     }
 }

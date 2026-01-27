@@ -37,6 +37,10 @@ public sealed record Customer(int Id, string Name);
 
 public static class CustomerQueries
 {
+    private static Customer MapCustomer(IDataRecord record) => new(
+        Id: record.Get<int>("Id") ?? 0,
+        Name: record.Get<string>("Name") ?? string.Empty);
+
     public static async Task<List<Customer>> GetCustomersAsync(DbOptions options, int minId, CancellationToken cancellationToken = default)
     {
         await using var executor = DbExecutor.Create(options);
@@ -71,9 +75,7 @@ public static class CustomerQueries
                         new DbParameter { Name = "@minId", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId }
                     }
                 },
-                map: (IDataRecord record) => new Customer(
-                    Id: record.Get<int>("Id") ?? 0,
-                    Name: record.Get<string>("Name") ?? string.Empty),
+                map: MapCustomer,
                 cancellationToken: cancellationToken)
             .ToListAsync(cancellationToken);
     }
@@ -125,6 +127,10 @@ public sealed record Customer(int Id, string Name);
 
 public static class CustomerRepository
 {
+    private static Customer MapCustomer(IDataRecord record) => new(
+        Id: record.Get<int>("Id") ?? 0,
+        Name: record.Get<string>("Name") ?? string.Empty);
+
     public static async Task<List<Customer>> GetCustomersAsync(DbOptions options, int minId, CancellationToken cancellationToken = default)
     {
         await using var executor = DbExecutor.Create(options);
@@ -151,9 +157,7 @@ public static class CustomerRepository
                     CommandType = CommandType.Text,
                     Parameters = new[] { GetMinIdParameter(databaseType, minId) }
                 },
-                map: (IDataRecord record) => new Customer(
-                    Id: record.Get<int>("Id") ?? 0,
-                    Name: record.Get<string>("Name") ?? string.Empty),
+                map: MapCustomer,
                 cancellationToken: cancellationToken)
             .ToListAsync(cancellationToken);
     }
@@ -233,6 +237,10 @@ public sealed record Customer(int Id, string Name);
 
 public static class CustomerStreams
 {
+    private static Customer MapCustomer(IDataRecord record) => new(
+        Id: record.Get<int>("Id") ?? 0,
+        Name: record.Get<string>("Name") ?? string.Empty);
+
     public static IAsyncEnumerable<Customer> StreamCustomers(
         IDbExecutor executor,
         DatabaseType databaseType,
@@ -258,9 +266,7 @@ public static class CustomerStreams
                     new DbParameter { Name = "@minId", DataType = DbDataType.Int32, Direction = ParameterDirection.Input, Value = minId }
                 }
             },
-            map: (IDataRecord record) => new Customer(
-                Id: record.Get<int>("Id") ?? 0,
-                Name: record.Get<string>("Name") ?? string.Empty),
+            map: MapCustomer,
             cancellationToken: cancellationToken);
     }
 }
@@ -302,6 +308,10 @@ public sealed record Customer(int Id, string Name);
 
 public static class Demo
 {
+    private static Customer MapCustomer(IDataRecord record) => new(
+        Id: record.Get<int>("Id") ?? 0,
+        Name: record.Get<string>("Name") ?? string.Empty);
+
     public static async Task RunAsync(CancellationToken cancellationToken = default)
     {
         var options = new DbOptions
@@ -321,9 +331,7 @@ public static class Demo
 
         await foreach (var customer in executor.QueryAsync(
             command,
-            (IDataRecord record) => new Customer(
-                record.Get<int>("Id") ?? 0,
-                record.Get<string>("Name") ?? string.Empty),
+            MapCustomer,
             cancellationToken))
         {
             Console.WriteLine($"{customer.Id} - {customer.Name}");
@@ -348,6 +356,10 @@ public sealed record Customer(int Id, string Name);
 
 static async Task<List<Customer>> GetCustomersAsync(AdoAsync.Abstractions.IDbExecutor executor, CancellationToken cancellationToken)
 {
+    static Customer MapCustomer(IDataRecord record) => new(
+        Id: record.Get<int>("Id") ?? 0,
+        Name: record.Get<string>("Name") ?? string.Empty);
+
     var command = new CommandDefinition
     {
         CommandText = "select Id, Name from dbo.Customers",
@@ -358,9 +370,7 @@ static async Task<List<Customer>> GetCustomersAsync(AdoAsync.Abstractions.IDbExe
     return await executor
         .QueryAsync(
             command,
-            (IDataRecord record) => new Customer(
-                record.Get<int>("Id") ?? 0,
-                record.Get<string>("Name") ?? string.Empty),
+            MapCustomer,
             cancellationToken)
         .ToListAsync(cancellationToken);
 }
@@ -370,13 +380,15 @@ Equivalent, but calling the extension method explicitly (same behavior, just mor
 
 ```csharp
 // Style B: explicit static call (exact same method as Style A)
+static Customer MapCustomer(IDataRecord record) => new(
+    Id: record.Get<int>("Id") ?? 0,
+    Name: record.Get<string>("Name") ?? string.Empty);
+
 return await AdoAsync.Execution.DbExecutorQueryExtensions
     .QueryAsync(
         executor,
         command,
-        (IDataRecord record) => new Customer(
-            record.Get<int>("Id") ?? 0,
-            record.Get<string>("Name") ?? string.Empty),
+        MapCustomer,
         cancellationToken)
     .ToListAsync(cancellationToken);
 ```
@@ -445,6 +457,10 @@ using AdoAsync.Execution;
 
 public sealed record Customer(int Id, string Name);
 
+static Customer MapCustomer(IDataRecord record) => new(
+    Id: record.Get<int>("Id") ?? 0,
+    Name: record.Get<string>("Name") ?? string.Empty);
+
 await using var result = await executor.ExecuteReaderAsync(new CommandDefinition
 {
     CommandText = "select Id, Name from dbo.Customers",
@@ -456,9 +472,7 @@ await using (result.Reader)
 {
     while (await result.Reader.ReadAsync(cancellationToken))
     {
-        customers.Add(new Customer(
-            Id: result.Reader.Get<int>("Id") ?? 0,
-            Name: result.Reader.Get<string>("Name") ?? string.Empty));
+        customers.Add(MapCustomer(result.Reader));
     }
 }
 ```
