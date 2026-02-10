@@ -153,7 +153,7 @@ var command = CommandDefinitionFactory.Create(
     databaseType: DatabaseType.SqlServer,
     commandText: "dbo.GetCustomerAndOrdersWithStatus",
     commandType: CommandType.StoredProcedure,
-    parameterSpecs: new[]
+    parameterSpecs: new List<CommandDefinitionFactory.DbParameterSpec>
     {
         new CommandDefinitionFactory.DbParameterSpec("customerId", DbDataType.Int32, ParameterDirection.Input, 42),
         new CommandDefinitionFactory.DbParameterSpec("message", DbDataType.String, ParameterDirection.Output, Size: 4000)
@@ -179,7 +179,7 @@ var parameterSpecs = new List<CommandDefinitionFactory.DbParameterSpec>
     new("@message", DbDataType.String, ParameterDirection.Output, Size: 4000),
     new("@price", DbDataType.Decimal, ParameterDirection.Input, 12.34m, Precision: 10, Scale: 2),
     new("@tvp", DbDataType.Structured, ParameterDirection.Input, Value: null, StructuredTypeName: "dbo.ItemType"),
-    new("@arrayValues", DbDataType.Int32, ParameterDirection.Input, new[] { 1, 2, 3 }, IsArrayBinding: true)
+    new("@arrayValues", DbDataType.Int32, ParameterDirection.Input, new List<int> { 1, 2, 3 }, IsArrayBinding: true)
 };
 
 var command = CommandDefinitionFactory.Create(
@@ -215,7 +215,7 @@ var command = CommandDefinitionFactory.Create(
     databaseType: DatabaseType.SqlServer,
     commandText: "dbo.GetCustomersWithStatus",
     commandType: CommandType.StoredProcedure,
-    parameterSpecs: new[]
+    parameterSpecs: new List<CommandDefinitionFactory.DbParameterSpec>
     {
         new CommandDefinitionFactory.DbParameterSpec("minId", DbDataType.Int32, ParameterDirection.Input, 100),
         new CommandDefinitionFactory.DbParameterSpec("message", DbDataType.String, ParameterDirection.Output, Size: 4000)
@@ -244,7 +244,7 @@ public static async Task<(int RowsAffected, IReadOnlyDictionary<string, object?>
         databaseType: DatabaseType.SqlServer,
         commandText: "dbo.UpdateCustomerStatus",
         commandType: CommandType.StoredProcedure,
-        parameterSpecs: new[]
+        parameterSpecs: new List<CommandDefinitionFactory.DbParameterSpec>
         {
             new CommandDefinitionFactory.DbParameterSpec("customerId", DbDataType.Int32, ParameterDirection.Input, customerId),
             new CommandDefinitionFactory.DbParameterSpec("status", DbDataType.String, ParameterDirection.Input, status),
@@ -284,7 +284,7 @@ var dataSetCommand = CommandDefinitionFactory.Create(
     databaseType: DatabaseType.SqlServer,
     commandText: "dbo.GetCustomersAndOrders",
     commandType: CommandType.StoredProcedure,
-    parameterSpecs: new[]
+    parameterSpecs: new List<CommandDefinitionFactory.DbParameterSpec>
     {
         new CommandDefinitionFactory.DbParameterSpec("customerId", DbDataType.Int32, ParameterDirection.Input, 42)
     },
@@ -316,7 +316,7 @@ var command = CommandDefinitionFactory.Create(
     databaseType: DatabaseType.SqlServer,
     commandText: "dbo.GetCustomerAndOrdersWithStatus",
     commandType: CommandType.StoredProcedure,
-    parameterSpecs: new[]
+    parameterSpecs: new List<CommandDefinitionFactory.DbParameterSpec>
     {
         new CommandDefinitionFactory.DbParameterSpec("customerId", DbDataType.Int32, ParameterDirection.Input, 42),
         new CommandDefinitionFactory.DbParameterSpec("message", DbDataType.String, ParameterDirection.Output, Size: 4000)
@@ -354,7 +354,7 @@ await using IDbExecutor executor = DbExecutor.Create(new DbOptions
 var command = CommandDefinitionFactory.Create(
     commandText: "public.get_customers_with_status",
     commandType: CommandType.StoredProcedure,
-    parameterSpecs: new[]
+    parameterSpecs: new List<CommandDefinitionFactory.DbParameterSpec>
     {
         new CommandDefinitionFactory.DbParameterSpec("min_id", DbDataType.Int32, ParameterDirection.Input, 100),
         new CommandDefinitionFactory.DbParameterSpec("customer_cursor", DbDataType.RefCursor, ParameterDirection.Output),
@@ -427,7 +427,7 @@ await using IDbExecutor executor = DbExecutor.Create(new DbOptions
 var command = CommandDefinitionFactory.Create(
     commandText: "public.get_customer_and_orders_with_status",
     commandType: CommandType.StoredProcedure,
-    parameterSpecs: new[]
+    parameterSpecs: new List<CommandDefinitionFactory.DbParameterSpec>
     {
         new CommandDefinitionFactory.DbParameterSpec("customer_id", DbDataType.Int32, ParameterDirection.Input, 42),
         new CommandDefinitionFactory.DbParameterSpec("customer_cursor", DbDataType.RefCursor, ParameterDirection.Output),
@@ -467,7 +467,7 @@ await using IDbExecutor executor = DbExecutor.Create(new DbOptions
 var command = CommandDefinitionFactory.Create(
     commandText: "PKG_CUSTOMER.GET_CUSTOMERS_WITH_STATUS",
     commandType: CommandType.StoredProcedure,
-    parameterSpecs: new[]
+    parameterSpecs: new List<CommandDefinitionFactory.DbParameterSpec>
     {
         new CommandDefinitionFactory.DbParameterSpec("p_min_id", DbDataType.Int32, ParameterDirection.Input, 100),
         new CommandDefinitionFactory.DbParameterSpec("p_customers", DbDataType.RefCursor, ParameterDirection.Output),
@@ -503,7 +503,7 @@ await using IDbExecutor executor = DbExecutor.Create(new DbOptions
 var command = CommandDefinitionFactory.Create(
     commandText: "PKG_CUSTOMER.GET_CUSTOMER_AND_ORDERS_WITH_STATUS",
     commandType: CommandType.StoredProcedure,
-    parameterSpecs: new[]
+    parameterSpecs: new List<CommandDefinitionFactory.DbParameterSpec>
     {
         new CommandDefinitionFactory.DbParameterSpec("p_customer_id", DbDataType.Int32, ParameterDirection.Input, 42),
         new CommandDefinitionFactory.DbParameterSpec("p_customer", DbDataType.RefCursor, ParameterDirection.Output),
