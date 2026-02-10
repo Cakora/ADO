@@ -212,12 +212,13 @@ await using IDbExecutor executor = DbExecutor.Create(new DbOptions
 });
 
 var command = CommandDefinitionFactory.Create(
+    databaseType: DatabaseType.SqlServer,
     commandText: "dbo.GetCustomersWithStatus",
     commandType: CommandType.StoredProcedure,
     parameterSpecs: new[]
     {
-        new CommandDefinitionFactory.DbParameterSpec("@minId", DbDataType.Int32, ParameterDirection.Input, 100),
-        new CommandDefinitionFactory.DbParameterSpec("@message", DbDataType.String, ParameterDirection.Output, Size: 4000)
+        new CommandDefinitionFactory.DbParameterSpec("minId", DbDataType.Int32, ParameterDirection.Input, 100),
+        new CommandDefinitionFactory.DbParameterSpec("message", DbDataType.String, ParameterDirection.Output, Size: 4000)
     });
 
 (List<Customer> Rows, IReadOnlyDictionary<string, object?> OutputParameters) result =
@@ -229,6 +230,71 @@ var command = CommandDefinitionFactory.Create(
 
 List<Customer> customers = result.Rows;
 string? message = (string?)result.OutputParameters["message"];
+```
+
+Example method using `ExecuteAsync` with a `CommandDefinition`:
+
+```csharp
+public static async Task<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> UpdateCustomerStatusAsync(
+    IDbExecutor executor,
+    int customerId,
+    string status)
+{
+    var command = CommandDefinitionFactory.Create(
+        databaseType: DatabaseType.SqlServer,
+        commandText: "dbo.UpdateCustomerStatus",
+        commandType: CommandType.StoredProcedure,
+        parameterSpecs: new[]
+        {
+            new CommandDefinitionFactory.DbParameterSpec("customerId", DbDataType.Int32, ParameterDirection.Input, customerId),
+            new CommandDefinitionFactory.DbParameterSpec("status", DbDataType.String, ParameterDirection.Input, status),
+            new CommandDefinitionFactory.DbParameterSpec("message", DbDataType.String, ParameterDirection.Output, Size: 4000)
+        },
+        commandTimeoutSeconds: 30);
+
+    return await executor.ExecuteAsync(command);
+}
+```
+
+Example: create list, single-line factory call, then use command in a method to process `DataTable`:
+
+```csharp
+var tableSpecs = new List<CommandDefinitionFactory.DbParameterSpec>
+{
+    new CommandDefinitionFactory.DbParameterSpec("minId", DbDataType.Int32, ParameterDirection.Input, 100)
+};
+
+var tableCommand = CommandDefinitionFactory.Create(commandText: "dbo.GetCustomers", commandType: CommandType.StoredProcedure, parameterSpecs: tableSpecs, databaseType: DatabaseType.SqlServer, commandTimeoutSeconds: 30);
+
+public static async Task<List<Customer>> LoadCustomersAsync(IDbExecutor executor, CommandDefinition command)
+{
+    (DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters) tableResult =
+        await executor.QueryTableAsync(command);
+
+    return tableResult.Table.ToList(row => new Customer(
+        Id: row.Field<int>("Id"),
+        Name: row.Field<string>("Name") ?? ""));
+}
+```
+
+Example: `ExecuteDataSetAsync` (multiple tables):
+
+```csharp
+var dataSetCommand = CommandDefinitionFactory.Create(
+    databaseType: DatabaseType.SqlServer,
+    commandText: "dbo.GetCustomersAndOrders",
+    commandType: CommandType.StoredProcedure,
+    parameterSpecs: new[]
+    {
+        new CommandDefinitionFactory.DbParameterSpec("customerId", DbDataType.Int32, ParameterDirection.Input, 42)
+    },
+    commandTimeoutSeconds: 30);
+
+(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters) dataSetResult =
+    await executor.ExecuteDataSetAsync(dataSetCommand);
+
+DataTable customerTable = dataSetResult.DataSet.Tables[0];
+DataTable ordersTable = dataSetResult.DataSet.Tables[1];
 ```
 
 ### B) `QueryTablesAsync` (multi-result + output message)
@@ -247,12 +313,13 @@ await using IDbExecutor executor = DbExecutor.Create(new DbOptions
 });
 
 var command = CommandDefinitionFactory.Create(
+    databaseType: DatabaseType.SqlServer,
     commandText: "dbo.GetCustomerAndOrdersWithStatus",
     commandType: CommandType.StoredProcedure,
     parameterSpecs: new[]
     {
-        new CommandDefinitionFactory.DbParameterSpec("@customerId", DbDataType.Int32, ParameterDirection.Input, 42),
-        new CommandDefinitionFactory.DbParameterSpec("@message", DbDataType.String, ParameterDirection.Output, Size: 4000)
+        new CommandDefinitionFactory.DbParameterSpec("customerId", DbDataType.Int32, ParameterDirection.Input, 42),
+        new CommandDefinitionFactory.DbParameterSpec("message", DbDataType.String, ParameterDirection.Output, Size: 4000)
     });
 
 (IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters) result =
@@ -303,6 +370,43 @@ var command = CommandDefinitionFactory.Create(
 
 List<Customer> customers = result.Rows;
 string? message = (string?)result.OutputParameters["message"];
+```
+
+Example: refcursor + output parameter + list/table/dataset read:
+
+```csharp
+var refCursorSpecs = new List<CommandDefinitionFactory.DbParameterSpec>
+{
+    new("customer_id", DbDataType.Int32, ParameterDirection.Input, 42),
+    new("customer_cursor", DbDataType.RefCursor, ParameterDirection.Output),
+    new("orders_cursor", DbDataType.RefCursor, ParameterDirection.Output),
+    new("message", DbDataType.String, ParameterDirection.Output, Size: 4000)
+};
+
+var refCursorCommand = CommandDefinitionFactory.Create(
+    databaseType: DatabaseType.PostgreSql,
+    commandText: "public.get_customer_and_orders_with_status",
+    commandType: CommandType.StoredProcedure,
+    parameterSpecs: refCursorSpecs,
+    commandTimeoutSeconds: 30);
+
+// A) List<T> (first cursor only)
+(List<Customer> Rows, IReadOnlyDictionary<string, object?> OutputParameters) listResult =
+    await executor.QueryAsync(
+        refCursorCommand,
+        row => new Customer(
+            Id: row.Field<int>("id"),
+            Name: row.Field<string>("name") ?? ""));
+
+// B) Tables (all cursors)
+(IReadOnlyList<DataTable> Tables, IReadOnlyDictionary<string, object?> OutputParameters) tablesResult =
+    await executor.QueryTablesAsync(refCursorCommand);
+
+// C) DataSet (all cursors)
+(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters) dataSetResult =
+    await executor.ExecuteDataSetAsync(refCursorCommand);
+
+string? outMessage = (string?)tablesResult.OutputParameters["message"];
 ```
 
 ### B) `QueryTablesAsync` (refcursor multi-result + output message)
