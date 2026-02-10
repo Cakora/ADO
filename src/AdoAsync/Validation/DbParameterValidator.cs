@@ -24,14 +24,11 @@ public sealed class DbParameterValidator : AbstractValidator<DbParameter>
 
         RuleFor(x => x.Name).NotEmpty();
 
-        RuleFor(x => x.Direction)
-            .Must(direction => direction != System.Data.ParameterDirection.ReturnValue)
-            .WithMessage("ReturnValue parameters are not supported.");
-
         RuleFor(x => x)
             .Must(p => !IsLengthConstrainedType(p.DataType) || p.Size.HasValue)
             .When(p => p.Direction is System.Data.ParameterDirection.Output
-                or System.Data.ParameterDirection.InputOutput)
+                or System.Data.ParameterDirection.InputOutput
+                or System.Data.ParameterDirection.ReturnValue)
             // Output parameters need explicit sizing across providers.
             .WithMessage("Output parameters must specify Size.");
 

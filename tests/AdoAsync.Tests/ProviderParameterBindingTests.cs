@@ -75,6 +75,8 @@ public sealed class ProviderParameterBindingTests
 
         command.ArrayBindCount.Should().Be(3);
         command.Parameters.Count.Should().Be(2);
+        command.Parameters[0]!.ParameterName.Should().Be("p_destination_id");
+        command.Parameters[1]!.ParameterName.Should().Be("p_state");
         command.Parameters[0]!.CollectionType.Should().Be(OracleCollectionType.PLSQLAssociativeArray);
         command.Parameters[1]!.CollectionType.Should().Be(OracleCollectionType.PLSQLAssociativeArray);
         command.Parameters[0]!.Size.Should().Be(3);

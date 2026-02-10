@@ -10,6 +10,32 @@ public sealed class ParameterValidationTests
     private readonly DbParameterValidator _validator = new();
 
     [Fact]
+    public void DbParameterValidator_ReturnValue_IsValid()
+    {
+        var result = _validator.Validate(new DbParameter
+        {
+            Name = ":result",
+            DataType = DbDataType.Int32,
+            Direction = ParameterDirection.ReturnValue
+        });
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DbParameterValidator_ReturnValue_StringMissingSize_IsInvalid()
+    {
+        var result = _validator.Validate(new DbParameter
+        {
+            Name = ":result",
+            DataType = DbDataType.String,
+            Direction = ParameterDirection.ReturnValue
+        });
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
     public void DbParameterValidator_Structured_MissingStructuredTypeName_IsInvalid()
     {
         var result = _validator.Validate(new DbParameter
@@ -114,4 +140,3 @@ public sealed class ParameterValidationTests
         result.IsValid.Should().BeTrue();
     }
 }
-

@@ -12,7 +12,7 @@ internal static class ParameterHelper
         parameters is not null
         && parameters.Count != 0
         && parameters.Any(p =>
-            p.Direction is ParameterDirection.Output or ParameterDirection.InputOutput
+            p.Direction is ParameterDirection.Output or ParameterDirection.InputOutput or ParameterDirection.ReturnValue
             && p.DataType != DbDataType.RefCursor);
 
     /// <summary>Extract non-input parameters, skipping refcursors (handled as result sets) and normalizing by declared DbDataType.</summary>
@@ -38,8 +38,8 @@ internal static class ParameterHelper
 
         foreach (System.Data.Common.DbParameter parameter in command.Parameters)
         {
-            // Only expose OUTPUT / INPUTOUTPUT parameters (exclude ReturnValue and Input).
-            if (parameter.Direction is ParameterDirection.Input or ParameterDirection.ReturnValue)
+            // Only expose non-input parameters; skip refcursors (handled as result sets).
+            if (parameter.Direction is ParameterDirection.Input)
             {
                 continue;
             }

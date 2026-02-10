@@ -103,6 +103,7 @@ var outputs = result.OutputParameters;
 Use:
 
 - `IDbExecutor.QueryAsync<T>(..., Func<DataRow,T> map)` → `(List<T> Rows, IReadOnlyDictionary<string, object?> OutputParameters)`
+- More examples: `docs/query-examples-with-output-parameters.md`
 
 ```csharp
 (List<Customer> Rows, IReadOnlyDictionary<string, object?> OutputParameters) result = await executor.QueryAsync(

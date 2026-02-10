@@ -37,11 +37,10 @@ Grouped by action. Each item includes `file:line` and method signature (with ret
 ## Changed (Output parameter rules)
 
 - `src/AdoAsync/Helpers/ParameterHelper.cs:15` `public static IReadOnlyDictionary<string, object?>? ExtractOutputParameters(DbCommand command, IReadOnlyList<DbParameter>? parameters)`
-  - Only exposes `Output` / `InputOutput` parameters.
+  - Exposes `Output` / `InputOutput` / `ReturnValue` parameters.
   - Skips `DbDataType.RefCursor` (handled as result sets).
-  - Skips `ParameterDirection.ReturnValue`.
 - `src/AdoAsync/Validation/DbParameterValidator.cs:7` `public sealed class DbParameterValidator : AbstractValidator<DbParameter>`
-  - Disallows `ParameterDirection.ReturnValue`.
+  - Requires `Size` for `ReturnValue` string/binary types (same rule as other outputs).
 
 ## Changed (Refcursor policy)
 

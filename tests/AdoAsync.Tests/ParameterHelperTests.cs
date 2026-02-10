@@ -50,6 +50,17 @@ public class ParameterHelperTests
     }
 
     [Fact]
+    public void HasNonRefCursorOutputs_ReturnsTrue_WhenReturnValueDeclared()
+    {
+        var parameters = new List<DbParameter>
+        {
+            new() { Name = "@result", DataType = DbDataType.Int32, Direction = ParameterDirection.ReturnValue }
+        };
+
+        ParameterHelper.HasNonRefCursorOutputs(parameters).Should().BeTrue();
+    }
+
+    [Fact]
     public void ExtractOutputParameters_NormalizesOutputs()
     {
         using var command = new SqlCommand();
@@ -75,6 +86,28 @@ public class ParameterHelperTests
         outputs.Should().NotBeNull();
         outputs!.Should().ContainKey("id");
         outputs!["id"].Should().Be(42);
+    }
+
+    [Fact]
+    public void ExtractOutputParameters_IncludesReturnValue()
+    {
+        using var command = new SqlCommand();
+        command.Parameters.Add(new SqlParameter("@result", SqlDbType.Int)
+        {
+            Direction = ParameterDirection.ReturnValue,
+            Value = 7
+        });
+
+        var definitions = new List<DbParameter>
+        {
+            new() { Name = "@result", DataType = DbDataType.Int32, Direction = ParameterDirection.ReturnValue }
+        };
+
+        var outputs = ParameterHelper.ExtractOutputParameters(command, definitions);
+
+        outputs.Should().NotBeNull();
+        outputs!.Should().ContainKey("result");
+        outputs!["result"].Should().Be(7);
     }
 
     [Fact]

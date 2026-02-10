@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Oracle.ManagedDataAccess.Client;
 using Oracle.ManagedDataAccess.Types;
 using AdoAsync.Abstractions;
+using AdoAsync.Helpers;
 
 namespace AdoAsync.Providers.Oracle;
 
@@ -54,7 +55,8 @@ public sealed class OracleProvider : IDbProvider
             var isArrayBinding = param.IsArrayBinding;
             var oraParam = new OracleParameter
             {
-                ParameterName = param.Name,
+                // ODP.NET parameter names should not include the ":" prefix (the SQL text uses ":" for placeholders).
+                ParameterName = ParameterHelper.TrimParameterPrefix(param.Name),
                 Value = param.Value ?? DBNull.Value,
                 Direction = param.Direction
             };

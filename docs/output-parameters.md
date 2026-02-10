@@ -6,6 +6,7 @@ Key rules:
 
 - Output dictionary keys are normalized (provider prefix trimmed): `@NewId` / `:NewId` / `?NewId` → `"NewId"`.
 - Output values are normalized using the declared `DbDataType` when available.
+- `ParameterDirection.ReturnValue` is treated as an output and is included in the output dictionary.
 
 ---
 
@@ -85,6 +86,38 @@ Notes:
 
 ---
 
+## 2.1) Oracle PL/SQL / Functions (return values via `ReturnValue`)
+
+Oracle stored functions commonly return values via a `ReturnValue` parameter (instead of returning a rowset).
+
+Use `ExecuteAsync(...)` (or any tuple-returning API) and read the return value from `OutputParameters`:
+
+```csharp
+using System.Collections.Generic;
+using System.Data;
+using AdoAsync;
+using AdoAsync.Abstractions;
+using AdoAsync.Execution;
+
+await using IDbExecutor executor = DbExecutor.Create(options);
+
+(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters) result =
+    await executor.ExecuteAsync(new CommandDefinition
+    {
+        CommandText = "my_pkg.get_next_id",
+        CommandType = CommandType.StoredProcedure,
+        Parameters = new[]
+        {
+            new DbParameter { Name = ":result", DataType = DbDataType.Int32, Direction = ParameterDirection.ReturnValue },
+            new DbParameter { Name = ":p_customer_name", DataType = DbDataType.String, Direction = ParameterDirection.Input, Value = "Alice", Size = 200 }
+        }
+    });
+
+int nextId = (int)(result.OutputParameters["result"] ?? 0);
+```
+
+---
+
 ## 3) Buffered tables/datasets (when you need rows + outputs)
 
 Buffered APIs return output parameters in the tuple:
@@ -138,6 +171,14 @@ DataSet dataSet = dataSetResult.DataSet;
 IReadOnlyDictionary<string, object?> outputs = dataSetResult.OutputParameters;
 int? status = (int?)outputs["status"];
 ```
+
+---
+
+## More Examples
+
+- `docs/query-examples-with-output-parameters.md` (provider-specific `QueryAsync<T>` / `QueryTablesAsync` examples)
+- `docs/complete-query-examples.md` (full setup + complete steps for all providers)
+- `docs/execute-scalar-with-output-parameters.md` (`ExecuteScalarAsync<T>` + outputs for all providers)
 
 ---
 

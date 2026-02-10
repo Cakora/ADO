@@ -92,6 +92,10 @@ Optional:
 - `Size` (important for output strings/binary)
 - `Precision`/`Scale` (decimals)
 
+Notes:
+
+- `ReturnValue` parameters are treated as outputs and are included in the output dictionary returned by tuple-based APIs.
+
 ### `DbDataType` (cross-provider parameter type)
 
 `DbDataType` is the provider-neutral type used to create provider parameters (`SqlDbType`, `NpgsqlDbType`, `OracleDbType`).
@@ -314,6 +318,13 @@ var total = (int?)outputs?["total"];
 ```
 
 ---
+
+### 5.4 Related docs
+
+- `docs/output-parameters.md`
+- `docs/query-examples-with-output-parameters.md`
+- `docs/complete-query-examples.md`
+- `docs/execute-scalar-with-output-parameters.md`
 
 ## 6) Transactions (Explicit + Rollback-on-dispose)
 
