@@ -68,6 +68,47 @@ var dataSetResult = await db.ExecuteDataSetAsync(
     });
 ```
 
+### SQL Server shared transaction (multiple ExecuteNonQuery)
+
+```csharp
+await using var db = new SqlServerSimpleDb("Server=.;Database=MyDb;Trusted_Connection=True;");
+var (connection, transaction) = await db.BeginTransactionAsync();
+
+try
+{
+    await db.ExecuteNonQueryAsync(
+        commandText: "dbo.UpdateCustomerStatus",
+        commandType: CommandType.StoredProcedure,
+        transaction: transaction,
+        parameters: new List<SimpleParameter>
+        {
+            new("customerId", 42),
+            new("status", "Active")
+        });
+
+    await db.ExecuteNonQueryAsync(
+        commandText: "dbo.UpdateCustomerBalance",
+        commandType: CommandType.StoredProcedure,
+        transaction: transaction,
+        parameters: new List<SimpleParameter>
+        {
+            new("customerId", 42),
+            new("amount", 100m)
+        });
+
+    await transaction.CommitAsync();
+}
+catch
+{
+    await transaction.RollbackAsync();
+    throw;
+}
+finally
+{
+    await connection.DisposeAsync();
+}
+```
+
 ---
 
 ## PostgreSQL (refcursor example)

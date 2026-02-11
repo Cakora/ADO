@@ -248,6 +248,35 @@ public sealed class SqlServerSimpleDb : IDisposable
         }
     }
 
+    /// <summary>Begin a transaction for multiple commands on the same connection.</summary>
+    public async Task<(SqlConnection Connection, SqlTransaction Transaction)> BeginTransactionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        return (Connection: connection, Transaction: transaction);
+    }
+
+    /// <summary>Execute a non-query command using an existing transaction and return affected rows plus output parameters.</summary>
+    public async Task<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteNonQueryAsync(
+        string commandText,
+        CommandType commandType,
+        SqlTransaction transaction,
+        IEnumerable<SimpleParameter>? parameters = null,
+        int? commandTimeoutSeconds = null,
+        CancellationToken cancellationToken = default)
+    {
+        var connection = GetTransactionConnection(transaction);
+        await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+        command.Transaction = transaction;
+        var parameterList = AddParameters(command, parameters);
+
+        var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        var outputs = ExtractOutputs(command, parameterList);
+        return (RowsAffected: rows, OutputParameters: outputs);
+    }
+
     private static SqlCommand CreateCommand(SqlConnection connection, string commandText, CommandType commandType, int? commandTimeoutSeconds)
     {
         var command = connection.CreateCommand();
@@ -351,4 +380,7 @@ public sealed class SqlServerSimpleDb : IDisposable
             }
         }
     }
+
+    private static SqlConnection GetTransactionConnection(SqlTransaction transaction)
+        => transaction.Connection ?? throw new ArgumentException("Transaction must have an open connection.", nameof(transaction));
 }

@@ -43,6 +43,13 @@ public class simple_new_SimpleDbTests
     }
 
     [Fact(Skip = SkipMessage)]
+    public async Task SqlServer_ExecuteNonQueryAsync_WithoutParameters_Works()
+    {
+        using var db = new SqlServerSimpleDb("Server=.;Database=MyDb;Trusted_Connection=True;");
+        _ = await db.ExecuteNonQueryAsync("SELECT 1", CommandType.Text);
+    }
+
+    [Fact(Skip = SkipMessage)]
     public async Task PostgreSql_QueryTableAsync_Works()
     {
         using var db = new PostgreSqlSimpleDb("Host=localhost;Database=mydb;Username=myuser;Password=mypassword");
