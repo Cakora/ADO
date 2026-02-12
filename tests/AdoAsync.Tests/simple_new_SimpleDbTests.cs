@@ -63,6 +63,40 @@ public class simple_new_SimpleDbTests
     }
 
     [Fact(Skip = SkipMessage)]
+    public async Task SqlServer_BeginTransaction_DisposesConnection()
+    {
+        using var db = new SqlServerSimpleDb("Server=.;Database=MyDb;Trusted_Connection=True;");
+        var (connection, transaction) = await db.BeginTransactionAsync();
+
+        await transaction.DisposeAsync();
+        await connection.DisposeAsync();
+
+        connection.State.Should().Be(ConnectionState.Closed);
+    }
+
+    [Fact(Skip = SkipMessage)]
+    public async Task SqlServer_SharedTransaction_Rollback_DoesNotCommit()
+    {
+        using var db = new SqlServerSimpleDb("Server=.;Database=MyDb;Trusted_Connection=True;");
+        var (connection, transaction) = await db.BeginTransactionAsync();
+
+        try
+        {
+            await db.ExecuteNonQueryAsync(
+                commandText: "CREATE TABLE #temp_test(id int);",
+                commandType: CommandType.Text,
+                transaction: transaction);
+
+            await transaction.RollbackAsync();
+        }
+        finally
+        {
+            await transaction.DisposeAsync();
+            await connection.DisposeAsync();
+        }
+    }
+
+    [Fact(Skip = SkipMessage)]
     public async Task PostgreSql_QueryTableAsync_Works()
     {
         using var db = new PostgreSqlSimpleDb("Host=localhost;Database=mydb;Username=myuser;Password=mypassword");
