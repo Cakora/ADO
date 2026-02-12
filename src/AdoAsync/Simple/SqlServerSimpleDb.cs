@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Data.SqlClient;
 using AdoAsync.Helpers;
 using AdoAsync.Providers.SqlServer;
@@ -26,14 +27,14 @@ public sealed class SqlServerSimpleDb : IDisposable
     /// <summary>Execute a command and return a single DataTable plus output parameters.</summary>
     public async Task<(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTableAsync(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqlConnection(_connectionString);
+        await using var connection = new SqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+        await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
         var parameterList = AddParameters(command, parameters);
 
         using var adapter = new SqlDataAdapter(command);
@@ -47,18 +48,18 @@ public sealed class SqlServerSimpleDb : IDisposable
     /// <summary>Execute a command inside its own transaction and return a single DataTable plus output parameters.</summary>
     public async Task<(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTableInTransactionAsync(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqlConnection(_connectionString);
+        await using var connection = new SqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+            await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
             command.Transaction = transaction;
             var parameterList = AddParameters(command, parameters);
 
@@ -80,14 +81,14 @@ public sealed class SqlServerSimpleDb : IDisposable
     /// <summary>Execute a scalar command and return value plus output parameters.</summary>
     public async Task<(T Value, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteScalarAsync<T>(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqlConnection(_connectionString);
+        await using var connection = new SqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+        await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
         var parameterList = AddParameters(command, parameters);
 
         var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
@@ -108,18 +109,18 @@ public sealed class SqlServerSimpleDb : IDisposable
     /// <summary>Execute a scalar command inside its own transaction and return value plus output parameters.</summary>
     public async Task<(T Value, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteScalarInTransactionAsync<T>(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqlConnection(_connectionString);
+        await using var connection = new SqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+            await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
             command.Transaction = transaction;
             var parameterList = AddParameters(command, parameters);
 
@@ -149,14 +150,34 @@ public sealed class SqlServerSimpleDb : IDisposable
     /// <summary>Execute a non-query command and return affected rows plus output parameters.</summary>
     public async Task<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteNonQueryAsync(
         string commandText,
+        CommandType commandType = CommandType.StoredProcedure,
+        IEnumerable<SimpleParameter>? parameters = null,
+        CommonProcessInput? common = null,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = new SqlConnection(ResolveConnectionString(common));
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
+        var parameterList = AddParameters(command, parameters);
+
+        var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        var outputs = ExtractOutputs(command, parameterList);
+        return (RowsAffected: rows, OutputParameters: outputs);
+    }
+
+    /// <summary>Execute a non-query command using an existing transaction and return affected rows plus output parameters.</summary>
+    [SuppressMessage("Major Code Smell", "S2325:Make 'ExecuteNonQueryAsync' a static method", Justification = "Keep instance API consistent with other operations.")]
+    public async Task<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteNonQueryAsync(
+        string commandText,
         CommandType commandType,
+        SqlTransaction transaction,
         IEnumerable<SimpleParameter>? parameters = null,
         int? commandTimeoutSeconds = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var connection = GetTransactionConnection(transaction);
         await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+        command.Transaction = transaction;
         var parameterList = AddParameters(command, parameters);
 
         var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -167,18 +188,18 @@ public sealed class SqlServerSimpleDb : IDisposable
     /// <summary>Execute a non-query command inside its own transaction and return affected rows plus output parameters.</summary>
     public async Task<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteNonQueryInTransactionAsync(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqlConnection(_connectionString);
+        await using var connection = new SqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+            await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
             command.Transaction = transaction;
             var parameterList = AddParameters(command, parameters);
 
@@ -197,14 +218,14 @@ public sealed class SqlServerSimpleDb : IDisposable
     /// <summary>Execute a command and return DataSet plus output parameters.</summary>
     public async Task<(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteDataSetAsync(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqlConnection(_connectionString);
+        await using var connection = new SqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+        await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
         var parameterList = AddParameters(command, parameters);
 
         using var adapter = new SqlDataAdapter(command);
@@ -218,18 +239,18 @@ public sealed class SqlServerSimpleDb : IDisposable
     /// <summary>Execute a command inside its own transaction and return DataSet plus output parameters.</summary>
     public async Task<(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteDataSetInTransactionAsync(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqlConnection(_connectionString);
+        await using var connection = new SqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+            await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
             command.Transaction = transaction;
             var parameterList = AddParameters(command, parameters);
 
@@ -256,25 +277,6 @@ public sealed class SqlServerSimpleDb : IDisposable
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         return (Connection: connection, Transaction: transaction);
-    }
-
-    /// <summary>Execute a non-query command using an existing transaction and return affected rows plus output parameters.</summary>
-    public async Task<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteNonQueryAsync(
-        string commandText,
-        CommandType commandType,
-        SqlTransaction transaction,
-        IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
-        CancellationToken cancellationToken = default)
-    {
-        var connection = GetTransactionConnection(transaction);
-        await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
-        command.Transaction = transaction;
-        var parameterList = AddParameters(command, parameters);
-
-        var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        var outputs = ExtractOutputs(command, parameterList);
-        return (RowsAffected: rows, OutputParameters: outputs);
     }
 
     private static SqlCommand CreateCommand(SqlConnection connection, string commandText, CommandType commandType, int? commandTimeoutSeconds)
@@ -379,6 +381,21 @@ public sealed class SqlServerSimpleDb : IDisposable
                 throw new DatabaseException(ErrorCategory.Validation, "SQL Server does not support RefCursor parameters.");
             }
         }
+    }
+
+    private string ResolveConnectionString(CommonProcessInput? common)
+    {
+        if (common is null)
+        {
+            return _connectionString;
+        }
+
+        if (string.IsNullOrWhiteSpace(common.ConnectionString))
+        {
+            throw new ArgumentException("CommonProcessInput.ConnectionString is required.", nameof(common));
+        }
+
+        return common.ConnectionString;
     }
 
     private static SqlConnection GetTransactionConnection(SqlTransaction transaction)

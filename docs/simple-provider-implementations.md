@@ -68,6 +68,21 @@ var dataSetResult = await db.ExecuteDataSetAsync(
     });
 ```
 
+### Default StoredProcedure + options input (all providers)
+
+```csharp
+public Task<(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)> GetCustomersAsync(
+    CommonProcessInput common)
+{
+    return db.QueryTableAsync(
+        commandText: "dbo.GetCustomers",
+        parameters: new List<SimpleParameter> { new("minId", 100) },
+        common: common);
+}
+```
+
+If you use `IOptionsMonitor<CommonProcessInput>`, pass `options.CurrentValue` to these overloads. `CommonProcessInput.ConnectionString` must be set.
+
 ### SQL Server shared transaction (multiple ExecuteNonQuery)
 
 ```csharp
@@ -264,9 +279,9 @@ var result = await db.QueryTableAsync(
 
 var customers = result.Table.ToList(row => new Customer
 {
-    Id = row.Field<int>("customer_id"),
-    Name = row.Field<string>("name") ?? string.Empty,
-    Status = row.Field<string>("status") ?? string.Empty
+    Id = row.SafeGet<int>("customer_id") ?? 0,
+    Name = row.SafeGet<string>("name") ?? string.Empty,
+    Status = row.SafeGet<string>("status") ?? string.Empty
 });
 ```
 

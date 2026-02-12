@@ -43,6 +43,19 @@ public class simple_new_SimpleDbTests
     }
 
     [Fact(Skip = SkipMessage)]
+    public async Task SqlServer_QueryTableAsync_WithOptions_Works()
+    {
+        using var db = new SqlServerSimpleDb("Server=.;Database=MyDb;Trusted_Connection=True;");
+        var parameters = new List<SimpleParameter> { new("minId", 100) };
+        var common = new CommonProcessInput
+        {
+            ConnectionString = "Server=.;Database=MyDb;Trusted_Connection=True;",
+            CommandTimeoutSeconds = 30
+        };
+        _ = await db.QueryTableAsync("dbo.GetCustomers", CommandType.StoredProcedure, parameters, common);
+    }
+
+    [Fact(Skip = SkipMessage)]
     public async Task SqlServer_ExecuteNonQueryAsync_WithoutParameters_Works()
     {
         using var db = new SqlServerSimpleDb("Server=.;Database=MyDb;Trusted_Connection=True;");
@@ -58,10 +71,36 @@ public class simple_new_SimpleDbTests
     }
 
     [Fact(Skip = SkipMessage)]
+    public async Task PostgreSql_QueryTableAsync_WithOptions_Works()
+    {
+        using var db = new PostgreSqlSimpleDb("Host=localhost;Database=mydb;Username=myuser;Password=mypassword");
+        var parameters = new List<SimpleParameter> { new("min_id", 100) };
+        var common = new CommonProcessInput
+        {
+            ConnectionString = "Host=localhost;Database=mydb;Username=myuser;Password=mypassword",
+            CommandTimeoutSeconds = 30
+        };
+        _ = await db.QueryTableAsync("public.get_customers", CommandType.StoredProcedure, parameters, common);
+    }
+
+    [Fact(Skip = SkipMessage)]
     public async Task Oracle_QueryTableAsync_Works()
     {
         using var db = new OracleSimpleDb("User Id=myuser;Password=mypassword;Data Source=MyOracleDb");
         var parameters = new List<SimpleParameter> { new("p_min_id", 100) };
         _ = await db.QueryTableAsync("PKG_CUSTOMER.GET_CUSTOMERS", CommandType.StoredProcedure, parameters);
+    }
+
+    [Fact(Skip = SkipMessage)]
+    public async Task Oracle_QueryTableAsync_WithOptions_Works()
+    {
+        using var db = new OracleSimpleDb("User Id=myuser;Password=mypassword;Data Source=MyOracleDb");
+        var parameters = new List<SimpleParameter> { new("p_min_id", 100) };
+        var common = new CommonProcessInput
+        {
+            ConnectionString = "User Id=myuser;Password=mypassword;Data Source=MyOracleDb",
+            CommandTimeoutSeconds = 30
+        };
+        _ = await db.QueryTableAsync("PKG_CUSTOMER.GET_CUSTOMERS", CommandType.StoredProcedure, parameters, common);
     }
 }

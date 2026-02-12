@@ -26,14 +26,14 @@ public sealed class PostgreSqlSimpleDb : IDisposable
     /// <summary>Execute a command and return a single DataTable plus output parameters.</summary>
     public async Task<(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTableAsync(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new NpgsqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+        await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
         var parameterList = AddParameters(command, commandType, parameters);
 
         using var adapter = new NpgsqlDataAdapter(command);
@@ -47,18 +47,18 @@ public sealed class PostgreSqlSimpleDb : IDisposable
     /// <summary>Execute a command inside its own transaction and return a single DataTable plus output parameters.</summary>
     public async Task<(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTableInTransactionAsync(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new NpgsqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+            await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
             command.Transaction = transaction;
             var parameterList = AddParameters(command, commandType, parameters);
 
@@ -80,14 +80,14 @@ public sealed class PostgreSqlSimpleDb : IDisposable
     /// <summary>Execute a scalar command and return value plus output parameters.</summary>
     public async Task<(T Value, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteScalarAsync<T>(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new NpgsqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+        await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
         var parameterList = AddParameters(command, commandType, parameters);
 
         var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
@@ -108,18 +108,18 @@ public sealed class PostgreSqlSimpleDb : IDisposable
     /// <summary>Execute a scalar command inside its own transaction and return value plus output parameters.</summary>
     public async Task<(T Value, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteScalarInTransactionAsync<T>(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new NpgsqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+            await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
             command.Transaction = transaction;
             var parameterList = AddParameters(command, commandType, parameters);
 
@@ -149,14 +149,14 @@ public sealed class PostgreSqlSimpleDb : IDisposable
     /// <summary>Execute a non-query command and return affected rows plus output parameters.</summary>
     public async Task<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteNonQueryAsync(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new NpgsqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+        await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
         var parameterList = AddParameters(command, commandType, parameters);
 
         var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -167,18 +167,18 @@ public sealed class PostgreSqlSimpleDb : IDisposable
     /// <summary>Execute a non-query command inside its own transaction and return affected rows plus output parameters.</summary>
     public async Task<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteNonQueryInTransactionAsync(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new NpgsqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+            await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
             command.Transaction = transaction;
             var parameterList = AddParameters(command, commandType, parameters);
 
@@ -197,14 +197,14 @@ public sealed class PostgreSqlSimpleDb : IDisposable
     /// <summary>Execute a command and return DataSet plus output parameters.</summary>
     public async Task<(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteDataSetAsync(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new NpgsqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+        await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
         var parameterList = AddParameters(command, commandType, parameters);
 
         using var adapter = new NpgsqlDataAdapter(command);
@@ -218,18 +218,18 @@ public sealed class PostgreSqlSimpleDb : IDisposable
     /// <summary>Execute a command inside its own transaction and return DataSet plus output parameters.</summary>
     public async Task<(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteDataSetInTransactionAsync(
         string commandText,
-        CommandType commandType,
+        CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        int? commandTimeoutSeconds = null,
+        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new NpgsqlConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            await using var command = CreateCommand(connection, commandText, commandType, commandTimeoutSeconds);
+            await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
             command.Transaction = transaction;
             var parameterList = AddParameters(command, commandType, parameters);
 
@@ -336,6 +336,21 @@ public sealed class PostgreSqlSimpleDb : IDisposable
         }
 
         return values;
+    }
+
+    private string ResolveConnectionString(CommonProcessInput? common)
+    {
+        if (common is null)
+        {
+            return _connectionString;
+        }
+
+        if (string.IsNullOrWhiteSpace(common.ConnectionString))
+        {
+            throw new ArgumentException("CommonProcessInput.ConnectionString is required.", nameof(common));
+        }
+
+        return common.ConnectionString;
     }
 
     private static string NormalizeParameterName(string name)
