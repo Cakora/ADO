@@ -10,12 +10,10 @@ namespace AdoAsync.Simple;
 /// <summary>Simple Oracle implementation for returning DataTable + outputs.</summary>
 public sealed class OracleSimpleDb : IDisposable
 {
-    private readonly string _connectionString;
-
+    private readonly string _instanceId = Guid.NewGuid().ToString("N");
     /// <summary>Create a new Oracle helper.</summary>
-    public OracleSimpleDb(string connectionString)
+    public OracleSimpleDb()
     {
-        _connectionString = connectionString;
     }
 
     /// <summary>Dispose resources (no-op; connections are per-call).</summary>
@@ -26,14 +24,14 @@ public sealed class OracleSimpleDb : IDisposable
     /// <summary>Execute a command and return a single DataTable plus output parameters.</summary>
     public async Task<(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTableAsync(
         string commandText,
+        CommonProcessInput common,
         CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
         await using var connection = new OracleConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
+        await using var command = CreateCommand(connection, commandText, commandType, common.CommandTimeoutSeconds);
         var parameterList = AddParameters(command, commandType, parameters);
 
         using var adapter = new OracleDataAdapter(command);
@@ -47,9 +45,9 @@ public sealed class OracleSimpleDb : IDisposable
     /// <summary>Execute a command inside its own transaction and return a single DataTable plus output parameters.</summary>
     public async Task<(DataTable Table, IReadOnlyDictionary<string, object?> OutputParameters)> QueryTableInTransactionAsync(
         string commandText,
+        CommonProcessInput common,
         CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
         await using var connection = new OracleConnection(ResolveConnectionString(common));
@@ -58,7 +56,7 @@ public sealed class OracleSimpleDb : IDisposable
 
         try
         {
-            await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
+            await using var command = CreateCommand(connection, commandText, commandType, common.CommandTimeoutSeconds);
             command.Transaction = transaction;
             var parameterList = AddParameters(command, commandType, parameters);
 
@@ -80,14 +78,14 @@ public sealed class OracleSimpleDb : IDisposable
     /// <summary>Execute a scalar command and return value plus output parameters.</summary>
     public async Task<(T Value, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteScalarAsync<T>(
         string commandText,
+        CommonProcessInput common,
         CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
         await using var connection = new OracleConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
+        await using var command = CreateCommand(connection, commandText, commandType, common.CommandTimeoutSeconds);
         var parameterList = AddParameters(command, commandType, parameters);
 
         var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
@@ -108,9 +106,9 @@ public sealed class OracleSimpleDb : IDisposable
     /// <summary>Execute a scalar command inside its own transaction and return value plus output parameters.</summary>
     public async Task<(T Value, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteScalarInTransactionAsync<T>(
         string commandText,
+        CommonProcessInput common,
         CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
         await using var connection = new OracleConnection(ResolveConnectionString(common));
@@ -119,7 +117,7 @@ public sealed class OracleSimpleDb : IDisposable
 
         try
         {
-            await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
+            await using var command = CreateCommand(connection, commandText, commandType, common.CommandTimeoutSeconds);
             command.Transaction = transaction;
             var parameterList = AddParameters(command, commandType, parameters);
 
@@ -149,14 +147,14 @@ public sealed class OracleSimpleDb : IDisposable
     /// <summary>Execute a non-query command and return affected rows plus output parameters.</summary>
     public async Task<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteNonQueryAsync(
         string commandText,
+        CommonProcessInput common,
         CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
         await using var connection = new OracleConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
+        await using var command = CreateCommand(connection, commandText, commandType, common.CommandTimeoutSeconds);
         var parameterList = AddParameters(command, commandType, parameters);
 
         var rows = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -167,9 +165,9 @@ public sealed class OracleSimpleDb : IDisposable
     /// <summary>Execute a non-query command inside its own transaction and return affected rows plus output parameters.</summary>
     public async Task<(int RowsAffected, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteNonQueryInTransactionAsync(
         string commandText,
+        CommonProcessInput common,
         CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
         await using var connection = new OracleConnection(ResolveConnectionString(common));
@@ -178,7 +176,7 @@ public sealed class OracleSimpleDb : IDisposable
 
         try
         {
-            await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
+            await using var command = CreateCommand(connection, commandText, commandType, common.CommandTimeoutSeconds);
             command.Transaction = transaction;
             var parameterList = AddParameters(command, commandType, parameters);
 
@@ -197,14 +195,14 @@ public sealed class OracleSimpleDb : IDisposable
     /// <summary>Execute a command and return DataSet plus output parameters.</summary>
     public async Task<(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteDataSetAsync(
         string commandText,
+        CommonProcessInput common,
         CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
         await using var connection = new OracleConnection(ResolveConnectionString(common));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
+        await using var command = CreateCommand(connection, commandText, commandType, common.CommandTimeoutSeconds);
         var parameterList = AddParameters(command, commandType, parameters);
 
         using var adapter = new OracleDataAdapter(command);
@@ -218,9 +216,9 @@ public sealed class OracleSimpleDb : IDisposable
     /// <summary>Execute a command inside its own transaction and return DataSet plus output parameters.</summary>
     public async Task<(DataSet DataSet, IReadOnlyDictionary<string, object?> OutputParameters)> ExecuteDataSetInTransactionAsync(
         string commandText,
+        CommonProcessInput common,
         CommandType commandType = CommandType.StoredProcedure,
         IEnumerable<SimpleParameter>? parameters = null,
-        CommonProcessInput? common = null,
         CancellationToken cancellationToken = default)
     {
         await using var connection = new OracleConnection(ResolveConnectionString(common));
@@ -229,7 +227,7 @@ public sealed class OracleSimpleDb : IDisposable
 
         try
         {
-            await using var command = CreateCommand(connection, commandText, commandType, common?.CommandTimeoutSeconds);
+            await using var command = CreateCommand(connection, commandText, commandType, common.CommandTimeoutSeconds);
             command.Transaction = transaction;
             var parameterList = AddParameters(command, commandType, parameters);
 
@@ -339,16 +337,11 @@ public sealed class OracleSimpleDb : IDisposable
         return values;
     }
 
-    private string ResolveConnectionString(CommonProcessInput? common)
+    private string ResolveConnectionString(CommonProcessInput common)
     {
-        if (common is null)
-        {
-            return _connectionString;
-        }
-
         if (string.IsNullOrWhiteSpace(common.ConnectionString))
         {
-            throw new ArgumentException("CommonProcessInput.ConnectionString is required.", nameof(common));
+            throw new ArgumentException($"CommonProcessInput.ConnectionString is required. Instance='{_instanceId}'.", nameof(common));
         }
 
         return common.ConnectionString;

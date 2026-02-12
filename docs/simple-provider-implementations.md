@@ -5,7 +5,7 @@ It does not use `DbExecutor` or `CommandDefinitionFactory`.
 
 Each class:
 
-- Takes a connection string.
+- Requires `CommonProcessInput.ConnectionString` for all calls (no constructor connection string).
 - Accepts a list of `SimpleParameter` values: `(name, value)` for Input, `(name, dbType, direction, size?)` for Output.
 - Returns `(DataTable, OutputParameters)`.
 - Uses provider-specific data adapters (no ExecuteReader).
@@ -18,7 +18,12 @@ Each class:
 using System.Data;
 using AdoAsync.Simple;
 
-using var db = new SqlServerSimpleDb("Server=.;Database=MyDb;Trusted_Connection=True;");
+using var db = new SqlServerSimpleDb();
+var common = new CommonProcessInput
+{
+    ConnectionString = "Server=.;Database=MyDb;Trusted_Connection=True;",
+    CommandTimeoutSeconds = 30
+};
 
 var parameters = new List<SimpleParameter>
 {
@@ -28,9 +33,9 @@ var parameters = new List<SimpleParameter>
 
 var result = await db.QueryTableAsync(
     commandText: "dbo.GetCustomersWithStatus",
+    common: common,
     commandType: CommandType.StoredProcedure,
-    parameters: parameters,
-    commandTimeoutSeconds: 30);
+    parameters: parameters);
 
 DataTable table = result.Table;
 string? message = (string?)result.OutputParameters["message"];
@@ -41,6 +46,7 @@ string? message = (string?)result.OutputParameters["message"];
 ```csharp
 var scalarResult = await db.ExecuteScalarAsync<int>(
     commandText: "dbo.GetCustomerCount",
+    common: common,
     commandType: CommandType.StoredProcedure,
     parameters: new List<SimpleParameter>
     {
@@ -50,6 +56,7 @@ var scalarResult = await db.ExecuteScalarAsync<int>(
 
 var nonQueryResult = await db.ExecuteNonQueryAsync(
     commandText: "dbo.UpdateCustomerStatus",
+    common: common,
     commandType: CommandType.StoredProcedure,
     parameters: new List<SimpleParameter>
     {
@@ -60,6 +67,7 @@ var nonQueryResult = await db.ExecuteNonQueryAsync(
 
 var dataSetResult = await db.ExecuteDataSetAsync(
     commandText: "dbo.GetCustomersAndOrders",
+    common: common,
     commandType: CommandType.StoredProcedure,
     parameters: new List<SimpleParameter>
     {
@@ -76,8 +84,8 @@ public Task<(DataTable Table, IReadOnlyDictionary<string, object?> OutputParamet
 {
     return db.QueryTableAsync(
         commandText: "dbo.GetCustomers",
-        parameters: new List<SimpleParameter> { new("minId", 100) },
-        common: common);
+        common: common,
+        parameters: new List<SimpleParameter> { new("minId", 100) });
 }
 ```
 
@@ -86,13 +94,15 @@ If you use `IOptionsMonitor<CommonProcessInput>`, pass `options.CurrentValue` to
 ### SQL Server shared transaction (multiple ExecuteNonQuery)
 
 ```csharp
-await using var db = new SqlServerSimpleDb("Server=.;Database=MyDb;Trusted_Connection=True;");
-var (connection, transaction) = await db.BeginTransactionAsync();
+await using var db = new SqlServerSimpleDb();
+var common = new CommonProcessInput { ConnectionString = "Server=.;Database=MyDb;Trusted_Connection=True;" };
+var (connection, transaction) = await db.BeginTransactionAsync(common);
 
 try
 {
     await db.ExecuteNonQueryAsync(
         commandText: "dbo.UpdateCustomerStatus",
+        common: common,
         commandType: CommandType.StoredProcedure,
         transaction: transaction,
         parameters: new List<SimpleParameter>
@@ -103,6 +113,7 @@ try
 
     await db.ExecuteNonQueryAsync(
         commandText: "dbo.UpdateCustomerBalance",
+        common: common,
         commandType: CommandType.StoredProcedure,
         transaction: transaction,
         parameters: new List<SimpleParameter>
@@ -132,7 +143,12 @@ finally
 using System.Data;
 using AdoAsync.Simple;
 
-using var db = new PostgreSqlSimpleDb("Host=localhost;Database=mydb;Username=myuser;Password=mypassword");
+using var db = new PostgreSqlSimpleDb();
+var common = new CommonProcessInput
+{
+    ConnectionString = "Host=localhost;Database=mydb;Username=myuser;Password=mypassword",
+    CommandTimeoutSeconds = 30
+};
 
 var parameters = new List<SimpleParameter>
 {
@@ -143,9 +159,9 @@ var parameters = new List<SimpleParameter>
 
 var result = await db.QueryTableAsync(
     commandText: "public.get_customer_with_status",
+    common: common,
     commandType: CommandType.StoredProcedure,
-    parameters: parameters,
-    commandTimeoutSeconds: 30);
+    parameters: parameters);
 
 DataTable table = result.Table;
 string? message = (string?)result.OutputParameters["message"];
@@ -156,6 +172,7 @@ string? message = (string?)result.OutputParameters["message"];
 ```csharp
 var scalarResult = await db.ExecuteScalarAsync<int>(
     commandText: "public.get_customer_count_with_message",
+    common: common,
     commandType: CommandType.StoredProcedure,
     parameters: new List<SimpleParameter>
     {
@@ -166,6 +183,7 @@ var scalarResult = await db.ExecuteScalarAsync<int>(
 
 var nonQueryResult = await db.ExecuteNonQueryAsync(
     commandText: "public.update_customer_status",
+    common: common,
     commandType: CommandType.StoredProcedure,
     parameters: new List<SimpleParameter>
     {
@@ -176,6 +194,7 @@ var nonQueryResult = await db.ExecuteNonQueryAsync(
 
 var dataSetResult = await db.ExecuteDataSetAsync(
     commandText: "public.get_customer_and_orders_with_status",
+    common: common,
     commandType: CommandType.StoredProcedure,
     parameters: new List<SimpleParameter>
     {
@@ -218,6 +237,7 @@ $$;
 ```csharp
 var result = await db.ExecuteDataSetAsync(
     commandText: "public.get_customer_and_orders_with_status",
+    common: common,
     commandType: CommandType.StoredProcedure,
     parameters: new List<SimpleParameter>
     {
@@ -242,12 +262,12 @@ var tableResult = await db.QueryTableAsync(
         FROM public.customers
         WHERE customer_id >= :min_id
         ORDER BY customer_id;",
+    common: common,
     commandType: CommandType.Text,
     parameters: new List<SimpleParameter>
     {
         new("min_id", 100)
-    },
-    commandTimeoutSeconds: 30);
+    });
 
 DataTable table = tableResult.Table;
 
@@ -255,12 +275,12 @@ var dataSetResult = await db.ExecuteDataSetAsync(
     commandText: @"
         SELECT customer_id, name FROM public.customers WHERE customer_id >= :min_id;
         SELECT order_id, customer_id, total FROM public.orders WHERE customer_id >= :min_id;",
+    common: common,
     commandType: CommandType.Text,
     parameters: new List<SimpleParameter>
     {
         new("min_id", 100)
-    },
-    commandTimeoutSeconds: 30);
+    });
 ```
 
 ### Convert DataTable to List (common for PostgreSQL/Oracle)
@@ -270,6 +290,7 @@ using AdoAsync.Extensions.Execution;
 
 var result = await db.QueryTableAsync(
     commandText: "public.get_customer_with_status",
+    common: common,
     commandType: CommandType.StoredProcedure,
     parameters: new List<SimpleParameter>
     {
@@ -293,7 +314,12 @@ var customers = result.Table.ToList(row => new Customer
 using System.Data;
 using AdoAsync.Simple;
 
-using var db = new OracleSimpleDb("User Id=myuser;Password=mypassword;Data Source=MyOracleDb");
+using var db = new OracleSimpleDb();
+var common = new CommonProcessInput
+{
+    ConnectionString = "User Id=myuser;Password=mypassword;Data Source=MyOracleDb",
+    CommandTimeoutSeconds = 30
+};
 
 var parameters = new List<SimpleParameter>
 {
@@ -304,9 +330,9 @@ var parameters = new List<SimpleParameter>
 
 var result = await db.QueryTableAsync(
     commandText: "PKG_CUSTOMER.GET_CUSTOMER_WITH_STATUS",
+    common: common,
     commandType: CommandType.StoredProcedure,
-    parameters: parameters,
-    commandTimeoutSeconds: 30);
+    parameters: parameters);
 
 DataTable table = result.Table;
 string? message = (string?)result.OutputParameters["p_message"];
@@ -317,6 +343,7 @@ string? message = (string?)result.OutputParameters["p_message"];
 ```csharp
 var scalarResult = await db.ExecuteScalarAsync<int>(
     commandText: "get_customer_count_with_message",
+    common: common,
     commandType: CommandType.StoredProcedure,
     parameters: new List<SimpleParameter>
     {
@@ -327,6 +354,7 @@ var scalarResult = await db.ExecuteScalarAsync<int>(
 
 var nonQueryResult = await db.ExecuteNonQueryAsync(
     commandText: "update_customer_status",
+    common: common,
     commandType: CommandType.StoredProcedure,
     parameters: new List<SimpleParameter>
     {
@@ -337,6 +365,7 @@ var nonQueryResult = await db.ExecuteNonQueryAsync(
 
 var dataSetResult = await db.ExecuteDataSetAsync(
     commandText: "PKG_CUSTOMER.GET_CUSTOMER_AND_ORDERS_WITH_STATUS",
+    common: common,
     commandType: CommandType.StoredProcedure,
     parameters: new List<SimpleParameter>
     {
@@ -377,6 +406,7 @@ END;
 ```csharp
 var result = await db.ExecuteDataSetAsync(
     commandText: "PKG_CUSTOMER.GET_CUSTOMER_AND_ORDERS_WITH_STATUS",
+    common: common,
     commandType: CommandType.StoredProcedure,
     parameters: new List<SimpleParameter>
     {
@@ -401,12 +431,12 @@ var tableResult = await db.QueryTableAsync(
         FROM customers
         WHERE customer_id >= :p_min_id
         ORDER BY customer_id",
+    common: common,
     commandType: CommandType.Text,
     parameters: new List<SimpleParameter>
     {
         new("p_min_id", 100)
-    },
-    commandTimeoutSeconds: 30);
+    });
 
 DataTable table = tableResult.Table;
 
@@ -414,12 +444,12 @@ var dataSetResult = await db.ExecuteDataSetAsync(
     commandText: @"
         SELECT customer_id, name FROM customers WHERE customer_id >= :p_min_id;
         SELECT order_id, customer_id, total FROM orders WHERE customer_id >= :p_min_id;",
+    common: common,
     commandType: CommandType.Text,
     parameters: new List<SimpleParameter>
     {
         new("p_min_id", 100)
-    },
-    commandTimeoutSeconds: 30);
+    });
 ```
 
 ---
@@ -427,8 +457,10 @@ var dataSetResult = await db.ExecuteDataSetAsync(
 ## With a Transaction
 
 ```csharp
+var common = new CommonProcessInput { ConnectionString = "Server=.;Database=MyDb;Trusted_Connection=True;" };
 var result = await db.QueryTableInTransactionAsync(
     commandText: "dbo.UpdateCustomerStatus",
+    common: common,
     commandType: CommandType.StoredProcedure,
     parameters: new List<SimpleParameter>
     {
